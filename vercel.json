@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "api/*.py": {
+      "runtime": "python3.11"
+    }
+  },
+  "routes": [
+    { "src": "/preferences", "dest": "/preferences.html" },
+    { "src": "/api/(.*)", "dest": "/api/$1.py" }
+  ]
+}

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NeuroDigest — Stay current in 5 minutes a week</title>
+  <meta name="description" content="A weekly digest of neurology literature — synthesized by AI, curated for practicing clinicians.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:  #1a1a2e;
+      --red:   #c0392b;
+      --body:  #444;
+      --light: #f7f7f5;
+      --serif: Georgia, 'Times New Roman', serif;
+      --sans:  -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--sans); color: var(--body); background: #fff; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(255,255,255,.95); backdrop-filter: blur(6px);
+      border-bottom: 1px solid #e8e8e4;
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+    }
+    .nav-logo {
+      font-family: var(--serif); font-size: 18px; font-weight: 700;
+      color: var(--navy); text-decoration: none; letter-spacing: -.3px;
+    }
+    .nav-links { display: flex; gap: 28px; }
+    .nav-links a {
+      font-size: 13px; color: #777; text-decoration: none;
+      letter-spacing: .2px;
+    }
+    .nav-links a:hover { color: var(--navy); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--light);
+      padding: 96px 24px 80px;
+    }
+    .hero-inner { max-width: 680px; width: 100%; text-align: center; }
+
+    .hero-eyebrow {
+      display: inline-block;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.8px;
+      text-transform: uppercase; color: var(--red);
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 700; line-height: 1.15;
+      color: var(--navy); margin-bottom: 20px;
+      letter-spacing: -.5px;
+    }
+
+    .hero-sub {
+      font-size: 18px; line-height: 1.65; color: #666;
+      max-width: 520px; margin: 0 auto 40px;
+    }
+
+    /* ── FORM ── */
+    .subscribe-form {
+      display: flex; gap: 0;
+      max-width: 460px; margin: 0 auto 16px;
+      border-radius: 4px; overflow: hidden;
+      box-shadow: 0 2px 20px rgba(0,0,0,.10);
+    }
+    .subscribe-form input[type="email"] {
+      flex: 1; padding: 15px 18px;
+      font-size: 15px; font-family: var(--sans);
+      border: 1px solid #ddd; border-right: none;
+      border-radius: 4px 0 0 4px;
+      outline: none; color: var(--body);
+      background: #fff;
+    }
+    .subscribe-form input[type="email"]:focus { border-color: var(--navy); }
+    .subscribe-form button {
+      padding: 15px 24px;
+      background: var(--navy); color: #fff;
+      border: none; cursor: pointer;
+      font-size: 14px; font-weight: 600; font-family: var(--sans);
+      letter-spacing: .3px;
+      border-radius: 0 4px 4px 0;
+      transition: background .2s;
+      white-space: nowrap;
+    }
+    .subscribe-form button:hover { background: #2d2d50; }
+    .form-note {
+      font-size: 12px; color: #999; text-align: center;
+    }
+
+    /* ── SOCIAL PROOF ── */
+    .proof {
+      display: flex; align-items: center; justify-content: center;
+      gap: 24px; margin-top: 48px; flex-wrap: wrap;
+    }
+    .proof-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: #888;
+    }
+    .proof-icon { color: var(--red); font-size: 16px; }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      width: 48px; height: 3px; background: var(--red);
+      margin: 0 auto 24px;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how { padding: 96px 24px; background: #fff; }
+    .how-inner { max-width: 860px; margin: 0 auto; text-align: center; }
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.8px;
+      text-transform: uppercase; color: var(--red); margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: var(--serif); font-size: clamp(26px, 4vw, 36px);
+      color: var(--navy); margin-bottom: 56px; font-weight: 700;
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 40px; text-align: left;
+    }
+    .step-num {
+      font-family: var(--serif); font-size: 36px; font-weight: 700;
+      color: #e8e8e0; margin-bottom: 12px; line-height: 1;
+    }
+    .step-title {
+      font-size: 15px; font-weight: 700; color: var(--navy);
+      margin-bottom: 8px;
+    }
+    .step-body { font-size: 14px; color: #777; line-height: 1.65; }
+
+    /* ── WHAT'S INSIDE ── */
+    .inside { padding: 96px 24px; background: var(--light); }
+    .inside-inner { max-width: 860px; margin: 0 auto; }
+    .inside-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px; margin-top: 48px;
+    }
+    .inside-card {
+      background: #fff; padding: 28px;
+      border-radius: 4px;
+      border-top: 3px solid var(--red);
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .inside-card-topic {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.4px;
+      text-transform: uppercase; color: var(--red); margin-bottom: 10px;
+    }
+    .inside-card-title {
+      font-family: var(--serif); font-size: 15px; font-weight: 700;
+      color: var(--navy); margin-bottom: 10px; line-height: 1.4;
+    }
+    .inside-card-body { font-size: 13px; color: #777; line-height: 1.65; }
+
+    /* ── FOR WHOM ── */
+    .forwhom { padding: 96px 24px; background: var(--navy); }
+    .forwhom-inner { max-width: 700px; margin: 0 auto; text-align: center; }
+    .forwhom .section-label { color: #c0392b; }
+    .forwhom .section-title { color: #fff; margin-bottom: 24px; }
+    .forwhom-body {
+      font-size: 17px; color: #aab; line-height: 1.75;
+      font-family: var(--serif); font-style: italic;
+      margin-bottom: 48px;
+    }
+    .forwhom-tags {
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    }
+    .tag {
+      padding: 8px 16px; border: 1px solid #334;
+      border-radius: 100px; font-size: 13px; color: #99a;
+      letter-spacing: .3px;
+    }
+
+    /* ── SAMPLE ── */
+    .sample { padding: 96px 24px; background: #fff; }
+    .sample-inner { max-width: 620px; margin: 0 auto; text-align: center; }
+    .email-mockup {
+      margin-top: 48px; border-radius: 6px; overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,.12);
+      text-align: left;
+    }
+    .mockup-header {
+      background: var(--navy); padding: 20px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .mockup-logo { font-family: var(--serif); color: #fff; font-size: 17px; font-weight: 700; }
+    .mockup-meta { font-size: 11px; color: #778; }
+    .mockup-bar { background: #f0f0ec; padding: 10px 28px; font-size: 11px; color: #999; letter-spacing: .4px; }
+    .mockup-body { padding: 24px 28px; }
+    .mockup-label { font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+    .mockup-headline { font-family: var(--serif); font-size: 16px; font-weight: 700; color: var(--navy); line-height: 1.4; margin-bottom: 14px; }
+    .mockup-text { font-size: 13px; color: #666; line-height: 1.7; margin-bottom: 10px; }
+    .mockup-impl { font-size: 12px; color: #555; font-style: italic; padding: 8px 12px; border-left: 3px solid var(--red); background: #fff8f7; margin-bottom: 16px; }
+    .mockup-hr { border: none; border-top: 1px solid #eee; margin: 16px 0; }
+    .mockup-action-bar { background: var(--navy); padding: 16px 28px; }
+    .mockup-action-label { font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+    .mockup-action-text { font-family: var(--serif); font-size: 14px; color: #fff; font-style: italic; line-height: 1.6; }
+
+    /* ── CTA ── */
+    .cta { padding: 96px 24px; background: var(--light); text-align: center; }
+    .cta-inner { max-width: 520px; margin: 0 auto; }
+    .cta .section-title { margin-bottom: 16px; }
+    .cta-sub { font-size: 16px; color: #777; margin-bottom: 36px; line-height: 1.6; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--navy); padding: 32px 24px; text-align: center;
+    }
+    footer p { font-size: 12px; color: #556; line-height: 1.8; }
+    footer a { color: #778; text-decoration: none; }
+    footer a:hover { color: #aaa; }
+
+    /* ── MOBILE ── */
+    @media (max-width: 600px) {
+      .subscribe-form { flex-direction: column; box-shadow: none; }
+      .subscribe-form input[type="email"] {
+        border-right: 1px solid #ddd;
+        border-radius: 4px; border-bottom: none; border-radius: 4px 4px 0 0;
+      }
+      .subscribe-form button { border-radius: 0 0 4px 4px; padding: 14px; }
+      .nav-links { display: none; }
+      .proof { flex-direction: column; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a class="nav-logo" href="#">NeuroDigest</a>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#inside">Topics</a>
+      <a href="#sample">Sample</a>
+      <a href="#subscribe">Subscribe</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero" id="top">
+    <div class="hero-inner">
+      <span class="hero-eyebrow">For Practicing Neurologists</span>
+      <h1>Stay current<br>in 5 minutes a week</h1>
+      <p class="hero-sub">
+        A weekly digest of neurology literature — synthesized by AI,
+        curated for practicing clinicians. Every Monday morning, in your inbox.
+      </p>
+
+      <form class="subscribe-form" id="subscribe" onsubmit="handleSubmit(event)">
+        <input type="email" placeholder="your@email.com" required autocomplete="email">
+        <button type="submit">Subscribe — it's free</button>
+      </form>
+      <p class="form-note">No spam. Unsubscribe in one click.</p>
+
+      <div class="proof">
+        <div class="proof-item">
+          <span class="proof-icon">◆</span>
+          <span>Delivered every Monday</span>
+        </div>
+        <div class="proof-item">
+          <span class="proof-icon">◆</span>
+          <span>Top peer-reviewed journals only</span>
+        </div>
+        <div class="proof-item">
+          <span class="proof-icon">◆</span>
+          <span>One actionable takeaway per edition</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how" id="how">
+    <div class="how-inner">
+      <p class="section-label">How it works</p>
+      <div class="section-divider"></div>
+      <h2 class="section-title">From journal to inbox — automatically</h2>
+      <div class="steps">
+        <div>
+          <div class="step-num">01</div>
+          <div class="step-title">Journals scanned</div>
+          <p class="step-body">Every week we scan JAMA Neurology, Lancet Neurology, Annals of Neurology, Stroke, Brain, and the Multiple Sclerosis Journal.</p>
+        </div>
+        <div>
+          <div class="step-num">02</div>
+          <div class="step-title">AI synthesis</div>
+          <p class="step-body">An AI reads every abstract and writes a clinically-framed briefing — grouping findings by theme, highlighting implications for practice.</p>
+        </div>
+        <div>
+          <div class="step-num">03</div>
+          <div class="step-title">One action extracted</div>
+          <p class="step-body">Every edition closes with a single sentence: the most practice-relevant takeaway of the week. No fluff, no caveats.</p>
+        </div>
+        <div>
+          <div class="step-num">04</div>
+          <div class="step-title">In your inbox Monday</div>
+          <p class="step-body">Clean HTML email, formatted like a journal. Every source linked. Read in 5 minutes, or save for later.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT'S INSIDE -->
+  <section class="inside" id="inside">
+    <div class="inside-inner">
+      <div style="text-align:center">
+        <p class="section-label">This week's topics</p>
+        <div class="section-divider"></div>
+        <h2 class="section-title">Three specialties, one briefing</h2>
+      </div>
+      <div class="inside-grid">
+        <div class="inside-card">
+          <div class="inside-card-topic">Multiple Sclerosis</div>
+          <div class="inside-card-title">New DMT evidence, biomarker guidance, and disease monitoring updates</div>
+          <p class="inside-card-body">From high-efficacy early therapy trials to NfL thresholds and MRI protocol updates — the MS literature, distilled.</p>
+        </div>
+        <div class="inside-card">
+          <div class="inside-card-topic">Stroke</div>
+          <div class="inside-card-title">Intervention windows, secondary prevention, and outcome data</div>
+          <p class="inside-card-body">Thrombectomy eligibility, anticoagulation in AF, hypertension targets — the evidence that changes decisions at the bedside.</p>
+        </div>
+        <div class="inside-card">
+          <div class="inside-card-topic">Botulinum Toxin</div>
+          <div class="inside-card-title">New indications, dosing refinements, and clinical trial results</div>
+          <p class="inside-card-body">Spasticity, dystonia, migraine, and beyond — updated evidence for one of neurology's most versatile therapeutic tools.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOR WHOM -->
+  <section class="forwhom">
+    <div class="forwhom-inner">
+      <p class="section-label">Who reads NeuroDigest</p>
+      <div class="section-divider" style="background:#c0392b"></div>
+      <h2 class="section-title">Built for clinicians who care about evidence</h2>
+      <p class="forwhom-body">
+        "I don't have time to read every journal. But I need to know
+        what changed this week. NeuroDigest tells me exactly that —
+        and why it matters for my patients."
+      </p>
+      <div class="forwhom-tags">
+        <span class="tag">Consultant neurologists</span>
+        <span class="tag">Neurology registrars</span>
+        <span class="tag">MS specialists</span>
+        <span class="tag">Stroke physicians</span>
+        <span class="tag">Rehabilitation medicine</span>
+        <span class="tag">Neurologists in training</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAMPLE EMAIL MOCKUP -->
+  <section class="sample" id="sample">
+    <div class="sample-inner">
+      <p class="section-label">Sample edition</p>
+      <div class="section-divider"></div>
+      <h2 class="section-title">What you'll receive</h2>
+
+      <div class="email-mockup">
+        <div class="mockup-header">
+          <span class="mockup-logo">NeuroDigest</span>
+          <span class="mockup-meta">Edition #12 · May 5, 2026</span>
+        </div>
+        <div class="mockup-bar">WEEK 19 · 2026 &nbsp;·&nbsp; MS &nbsp;·&nbsp; STROKE &nbsp;·&nbsp; BOTULINUM TOXIN</div>
+        <div class="mockup-body">
+          <div class="mockup-label">Multiple Sclerosis</div>
+          <div class="mockup-headline">Early high-efficacy DMT initiation reduces disability progression independent of relapse activity in RRMS</div>
+          <p class="mockup-text"><strong>EARLY HIGH-EFFICACY THERAPY BLUNTS PIRMA</strong><br>
+          A Latin American cohort showed early high-efficacy DMT exposure significantly reduced the risk of progression independent of relapse and MRI activity versus delayed escalation (Multiple Sclerosis Journal, 2026). These data extend the early-aggressive argument to populations with historically restricted DMT access.</p>
+          <div class="mockup-impl">Consider initiating high-efficacy DMT at diagnosis rather than adopting a defer-and-escalate strategy, even where access barriers exist.</div>
+          <hr class="mockup-hr">
+          <div class="mockup-label">Stroke</div>
+          <div class="mockup-headline">Extended thrombectomy window at 24 hours yields functional outcomes comparable to the 6-hour cohort in selected patients</div>
+          <p class="mockup-text"><strong>LATE-WINDOW THROMBECTOMY OUTCOMES</strong><br>
+          Registry data from 14 European centres confirm that penumbra-guided patient selection at 6–24 hours achieves mRS 0–2 at 90 days in 47% of cases, comparable to the early-window historical benchmark (Stroke, 2026).</p>
+          <div class="mockup-impl">Apply perfusion imaging selection criteria liberally in late-presenting patients — the therapeutic window is a function of tissue viability, not clock time.</div>
+        </div>
+        <div class="mockup-action-bar">
+          <div class="mockup-action-label">This Week's Single Action</div>
+          <div class="mockup-action-text">Discuss early high-efficacy DMT initiation at the next MS MDT — the defer-and-escalate paradigm is no longer supported by current evidence.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOTTOM CTA -->
+  <section class="cta">
+    <div class="cta-inner">
+      <p class="section-label">Join NeuroDigest</p>
+      <div class="section-divider"></div>
+      <h2 class="section-title">Free while in beta</h2>
+      <p class="cta-sub">Early subscribers get lifetime access to the free tier.<br>No credit card required.</p>
+      <form class="subscribe-form" onsubmit="handleSubmit(event)">
+        <input type="email" placeholder="your@email.com" required autocomplete="email">
+        <button type="submit">Subscribe free</button>
+      </form>
+      <p class="form-note">Unsubscribe anytime · neurodigest.io</p>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>
+      <strong style="color:#889;font-family:Georgia,serif">NeuroDigest</strong><br>
+      Weekly neurology literature briefing · neurodigest.io<br>
+      <a href="#">Privacy</a> &nbsp;·&nbsp;
+      <a href="#">Unsubscribe</a> &nbsp;·&nbsp;
+      <a href="#">Contact</a>
+    </p>
+  </footer>
+
+  <script>
+    function handleSubmit(e) {
+      e.preventDefault();
+      const btn = e.target.querySelector('button');
+      const input = e.target.querySelector('input');
+      btn.textContent = 'You\'re on the list!';
+      btn.style.background = '#2d6a4f';
+      input.disabled = true;
+      btn.disabled = true;
+    }
+  </script>
+
+</body>
+</html>
