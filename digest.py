@@ -181,52 +181,73 @@ Articles this week:
 # ── HTML email builder ────────────────────────────────────────────────────────
 NAV   = "#1a1a2e"
 ACC   = "#c0392b"
-BODY  = "#555555"
-BG    = "#f7f7f5"
+BODY  = "#222222"
+BG    = "#f4f4f2"
 WHITE = "#ffffff"
 
 def topic_section_html(topic: str, data: dict) -> str:
-    # data has keys: headline, themes, sources
     themes_html = ""
     for th in data.get("themes", []):
         body_paras = "".join(
-            f'<p style="margin:0 0 10px 0;line-height:1.7;color:{BODY}">{p.strip()}</p>'
+            f'<p style="margin:0 0 12px 0;font-size:15px;line-height:1.75;color:{BODY};'
+            f'font-family:Georgia,\'Times New Roman\',serif">{p.strip()}</p>'
             for p in th["body"].split("\n") if p.strip()
         )
         implication = th.get("implication", "")
+        impl_html = ""
+        if implication:
+            impl_html = (
+                f'<p style="margin:12px 0 0 0;padding:0 0 0 16px;'
+                f'border-left:2px solid {ACC};font-size:14px;color:#444;'
+                f'line-height:1.7;font-style:italic;'
+                f'font-family:Georgia,\'Times New Roman\',serif">{implication}</p>'
+            )
         themes_html += f"""
-        <div style="margin-bottom:24px">
-          <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;letter-spacing:1.2px;
-                    color:{ACC};text-transform:uppercase">{th['title']}</p>
+        <div style="margin-bottom:28px">
+          <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;letter-spacing:2px;
+                    color:{ACC};text-transform:uppercase;
+                    font-family:Helvetica,Arial,sans-serif">{th['title']}</p>
           {body_paras}
-          {"" if not implication else f'<p style="margin:8px 0 0 0;padding:10px 14px;background:#fff8f7;border-left:3px solid {ACC};font-size:13px;color:#333;line-height:1.6;font-style:italic">{implication}</p>'}
+          {impl_html}
         </div>"""
 
     sources_html = ""
     sources = data.get("sources", [])
     if sources:
         items = "".join(
-            f'<li style="margin:4px 0"><a href="{s["url"]}" style="color:{ACC};text-decoration:none">'
-            f'{s["title"]}</a> <span style="color:#999">— {s["journal"]}</span></li>'
+            f'<tr>'
+            f'<td style="padding:5px 0;vertical-align:top">'
+            f'<span style="font-size:10px;font-weight:700;letter-spacing:1px;'
+            f'text-transform:uppercase;color:#aaa;font-family:Helvetica,Arial,sans-serif;'
+            f'white-space:nowrap;padding-right:10px">{s["journal"]}</span>'
+            f'</td>'
+            f'<td style="padding:5px 0">'
+            f'<a href="{s["url"]}" style="font-size:12px;color:#555;text-decoration:none;'
+            f'font-family:Helvetica,Arial,sans-serif;line-height:1.5">{s["title"]}</a>'
+            f'</td>'
+            f'</tr>'
             for s in sources if s.get("url")
         )
         if items:
             sources_html = f"""
-            <div style="margin-top:20px;padding-top:16px;border-top:1px solid #eee">
-              <p style="margin:0 0 8px 0;font-size:11px;font-weight:700;letter-spacing:1px;color:#999;text-transform:uppercase">Sources</p>
-              <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8">{items}</ul>
+            <div style="margin-top:20px;padding-top:14px;border-top:1px solid #ebebeb">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%"
+                     style="border-collapse:collapse">{items}</table>
             </div>"""
 
     return f"""
-    <div style="margin-bottom:0;padding:28px 32px">
-      <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;letter-spacing:1.5px;
-                text-transform:uppercase;color:{ACC}">{topic}</p>
-      <p style="margin:0 0 20px 0;font-size:17px;font-weight:700;color:{NAV};line-height:1.4;
+    <tr><td style="padding:32px 40px 0">
+      <p style="margin:0 0 6px 0;font-size:10px;font-weight:700;letter-spacing:2px;
+                text-transform:uppercase;color:{ACC};
+                font-family:Helvetica,Arial,sans-serif">{topic}</p>
+      <p style="margin:0 0 24px 0;font-size:22px;font-weight:700;color:{NAV};line-height:1.3;
                 font-family:Georgia,'Times New Roman',serif">{data.get('headline','')}</p>
       {themes_html}
       {sources_html}
-    </div>
-    <hr style="border:none;border-top:1px solid #e8e8e8;margin:0">"""
+    </td></tr>
+    <tr><td style="padding:28px 40px 0">
+      <div style="border-top:1px solid #ebebeb"></div>
+    </td></tr>"""
 
 
 def build_html_email(digest: dict, edition: int,
@@ -241,12 +262,26 @@ def build_html_email(digest: dict, edition: int,
     action_html = ""
     if single_action:
         action_html = f"""
-        <div style="margin:0;padding:28px 32px;background:#1a1a2e">
-          <p style="margin:0 0 6px 0;font-size:10px;font-weight:700;letter-spacing:1.5px;
-                    text-transform:uppercase;color:#c0392b">This Week's Single Action</p>
-          <p style="margin:0;font-size:16px;color:#ffffff;line-height:1.6;
-                    font-family:Georgia,'Times New Roman',serif;font-style:italic">{single_action}</p>
-        </div>"""
+    <tr><td style="padding:32px 40px;background:{NAV}">
+      <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;letter-spacing:2px;
+                text-transform:uppercase;color:{ACC};
+                font-family:Helvetica,Arial,sans-serif">This Week's Take-Home</p>
+      <p style="margin:0;font-size:17px;color:{WHITE};line-height:1.65;
+                font-family:Georgia,'Times New Roman',serif;font-style:italic">{single_action}</p>
+    </td></tr>"""
+
+    manage_link = (
+        f'&nbsp;&middot;&nbsp;'
+        f'<a href="{site_url}/preferences?token={preferences_token}" '
+        f'style="color:#888;text-decoration:none">Manage topics</a>'
+        if preferences_token else ""
+    )
+    unsub_link = (
+        f'&nbsp;&middot;&nbsp;'
+        f'<a href="{site_url}/api/unsubscribe?token={preferences_token}" '
+        f'style="color:#888;text-decoration:none">Unsubscribe</a>'
+        if preferences_token else ""
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -256,37 +291,31 @@ def build_html_email(digest: dict, edition: int,
 <title>NeuroDigest — {date_str}</title>
 </head>
 <body style="margin:0;padding:0;background:{BG};-webkit-text-size-adjust:100%">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{BG}">
-<tr><td align="center" style="padding:32px 16px">
+<table width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:{BG};min-height:100%">
+<tr><td align="center" style="padding:40px 16px">
 
   <table width="100%" cellpadding="0" cellspacing="0" border="0"
-         style="max-width:620px;background:{WHITE};border-radius:4px;
-                overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.08);
+         style="max-width:640px;background:{WHITE};
+                border:1px solid #e0e0de;
                 font-family:Georgia,'Times New Roman',serif">
 
     <!-- Header -->
-    <tr><td style="background:{NAV};padding:28px 32px">
+    <tr><td style="padding:28px 40px 24px;border-bottom:3px solid {ACC}">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td>
-            <p style="margin:0;font-size:22px;font-weight:700;color:{WHITE};
-                      letter-spacing:-0.5px;font-family:Georgia,'Times New Roman',serif">
-              NeuroDigest
-            </p>
-            <p style="margin:4px 0 0;font-size:12px;color:#8899bb;
-                      font-family:Helvetica,Arial,sans-serif;font-weight:400">
+            <p style="margin:0;font-size:26px;font-weight:700;color:{NAV};letter-spacing:-0.5px;
+                      font-family:Georgia,'Times New Roman',serif">NeuroDigest</p>
+            <p style="margin:4px 0 0;font-size:11px;letter-spacing:1.5px;
+                      text-transform:uppercase;color:#888;
+                      font-family:Helvetica,Arial,sans-serif">
               Weekly Neurology Literature Briefing
             </p>
           </td>
-          <td align="right" style="vertical-align:top">
-            <p style="margin:0;font-size:12px;color:#8899bb;
-                      font-family:Helvetica,Arial,sans-serif">
-              Edition #{edition}
-            </p>
-            <p style="margin:4px 0 0;font-size:12px;color:#8899bb;
-                      font-family:Helvetica,Arial,sans-serif">
-              {date_str}
-            </p>
+          <td align="right" style="vertical-align:middle">
+            <p style="margin:0;font-size:12px;color:#aaa;
+                      font-family:Helvetica,Arial,sans-serif">{date_str}</p>
           </td>
         </tr>
       </table>
@@ -295,20 +324,19 @@ def build_html_email(digest: dict, edition: int,
     <!-- Topic sections -->
     {sections}
 
-    <!-- Single Action -->
+    <!-- breathing room before action block -->
+    <tr><td style="padding:12px 0"></td></tr>
+
+    <!-- Take-Home -->
     {action_html}
 
     <!-- Footer -->
-    <tr><td style="padding:20px 32px;background:#f0f0ec;border-top:1px solid #e0e0da">
-      <p style="margin:0 0 6px;font-size:11px;color:#999;font-family:Helvetica,Arial,sans-serif;
-                line-height:1.6">
-        You subscribed at <strong>neurodigest.io</strong>
-        {"" if not preferences_token else f' &nbsp;·&nbsp; <a href="{site_url}/preferences?token={preferences_token}" style="color:{ACC};text-decoration:none">Manage topics</a>'}
-        &nbsp;·&nbsp; <a href="{site_url}/api/unsubscribe?token={preferences_token}" style="color:{ACC};text-decoration:none">Unsubscribe</a>
-      </p>
-      <p style="margin:0;font-size:11px;color:#bbb;font-family:Helvetica,Arial,sans-serif">
-        Sources: JAMA Neurology · Lancet Neurology · Annals of Neurology · Stroke · Multiple Sclerosis Journal · Nature Reviews Neurology
-        <br>Edition {edition} — {date_str}
+    <tr><td style="padding:20px 40px;border-top:1px solid #ebebeb;background:#fafaf9">
+      <p style="margin:0;font-size:11px;color:#aaa;
+                font-family:Helvetica,Arial,sans-serif;line-height:1.8;text-align:center">
+        <strong style="color:#888">NeuroDigest</strong>
+        {manage_link}
+        {unsub_link}
       </p>
     </td></tr>
 
