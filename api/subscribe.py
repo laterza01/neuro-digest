@@ -100,15 +100,30 @@ class handler(BaseHTTPRequestHandler):
                     on_conflict="email",
                 ).execute()
 
-                # Send welcome email via Resend
-                import resend
+                import resend, time
                 resend.api_key = RESEND_API_KEY
+
+                # Send welcome email
                 resend.Emails.send({
                     "from":    RESEND_FROM,
                     "to":      email,
                     "subject": "Welcome to NeuroDigest",
                     "html":    _welcome_html(),
                 })
+
+                # Send latest digest if available
+                time.sleep(0.2)
+                latest = sb.table("digests").select("subject,html,plain") \
+                           .order("sent_at", desc=True).limit(1).execute()
+                if latest.data:
+                    d = latest.data[0]
+                    resend.Emails.send({
+                        "from":    RESEND_FROM,
+                        "to":      email,
+                        "subject": d["subject"],
+                        "html":    d["html"],
+                        "text":    d["plain"],
+                    })
 
             prefs_token = _make_token(email, "preferences")
             self._json({"ok": True,

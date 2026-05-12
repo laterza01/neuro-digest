@@ -586,6 +586,20 @@ def run():
     (OUTPUT_DIR / "neuro_digest.txt").write_text(plain)
     print(f"\nDigest saved → {OUTPUT_DIR.resolve()}")
 
+    # Save latest digest to Supabase so new subscribers receive it on sign-up
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_KEY", ""))
+        date_str = datetime.now().strftime("%B %d, %Y")
+        sb.table("digests").insert({
+            "subject": f"NeuroDigest — {date_str}",
+            "html":    html,
+            "plain":   plain,
+        }).execute()
+        print("  Latest digest saved to Supabase")
+    except Exception as e:
+        print(f"  Could not save digest to Supabase: {e}")
+
     print("Fetching confirmed subscribers from Supabase...")
     subscribers = fetch_supabase_subscribers()
 
