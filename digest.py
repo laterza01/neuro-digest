@@ -185,7 +185,19 @@ BODY  = "#222222"
 BG    = "#f4f4f2"
 WHITE = "#ffffff"
 
-def topic_section_html(topic: str, data: dict) -> str:
+# Per-section accent palette — professional, muted, readable on white
+SECTION_PALETTE = [
+    "#c0392b",  # crimson      — Stroke / Neurocritical
+    "#1a6b8a",  # cerulean     — MS / Neuroimmunology
+    "#2d6a4f",  # forest       — Epilepsy / Genetics
+    "#4a4080",  # indigo       — Dementia / Cognitive
+    "#7b4500",  # amber-brown  — Movement Disorders
+    "#1a5276",  # navy-teal    — Neurotrauma / Concussion
+    "#6b3a6b",  # plum         — Neuroinfectious / Oncology
+    "#3d6b41",  # sage         — Headache / Neuromuscular
+]
+
+def topic_section_html(topic: str, data: dict, color: str = ACC) -> str:
     themes_html = ""
     for th in data.get("themes", []):
         body_paras = "".join(
@@ -198,14 +210,14 @@ def topic_section_html(topic: str, data: dict) -> str:
         if implication:
             impl_html = (
                 f'<p style="margin:12px 0 0 0;padding:0 0 0 16px;'
-                f'border-left:2px solid {ACC};font-size:14px;color:#444;'
+                f'border-left:2px solid {color};font-size:14px;color:#444;'
                 f'line-height:1.7;font-style:italic;'
                 f'font-family:Georgia,\'Times New Roman\',serif">{implication}</p>'
             )
         themes_html += f"""
         <div style="margin-bottom:28px">
           <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;letter-spacing:2px;
-                    color:{ACC};text-transform:uppercase;
+                    color:{color};text-transform:uppercase;
                     font-family:Helvetica,Arial,sans-serif">{th['title']}</p>
           {body_paras}
           {impl_html}
@@ -238,7 +250,7 @@ def topic_section_html(topic: str, data: dict) -> str:
     return f"""
     <tr><td style="padding:32px 40px 0">
       <p style="margin:0 0 6px 0;font-size:10px;font-weight:700;letter-spacing:2px;
-                text-transform:uppercase;color:{ACC};
+                text-transform:uppercase;color:{color};
                 font-family:Helvetica,Arial,sans-serif">{topic}</p>
       <p style="margin:0 0 24px 0;font-size:22px;font-weight:700;color:{NAV};line-height:1.3;
                 font-family:Georgia,'Times New Roman',serif">{data.get('headline','')}</p>
@@ -256,8 +268,9 @@ def build_html_email(digest: dict, edition: int,
     single_action = digest.get("bottom_line", "")
 
     sections = ""
-    for sec in digest.get("sections", []):
-        sections += topic_section_html(sec["topic"], sec)
+    for i, sec in enumerate(digest.get("sections", [])):
+        color = SECTION_PALETTE[i % len(SECTION_PALETTE)]
+        sections += topic_section_html(sec["topic"], sec, color=color)
 
     action_html = ""
     if single_action:
@@ -361,8 +374,8 @@ def build_plain_text(digest: dict, edition: int) -> str:
             out += "\n"
         if sec.get("sources"):
             out += "Sources:\n"
-            for s in sec["sources"]:
-                out += f"  {s['n']}. {s['title']} — {s['journal']}\n     {s.get('url','')}\n"
+            for i, s in enumerate(sec["sources"], 1):
+                out += f"  {s.get('n', i)}. {s['title']} — {s['journal']}\n     {s.get('url','')}\n"
         out += "\n" + "—" * 54 + "\n\n"
     if digest.get("bottom_line"):
         out += f"THIS WEEK'S SINGLE ACTION\n{digest['bottom_line']}\n\n"
