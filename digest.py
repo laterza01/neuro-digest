@@ -131,7 +131,7 @@ def synthesize_all(articles: list[dict], client: anthropic.Anthropic) -> dict:
 
     articles_text = ""
     for i, a in enumerate(articles, 1):
-        abstract = a['summary'][:400] if a['summary'] else "(no abstract)"
+        abstract = a['summary'][:250] if a['summary'] else "(no abstract)"
         articles_text += (
             f"\n[{i}] {a['title']} | {a['journal']} | {a['pub_date']}\n"
             f"    URL: {a['link']}\n"
@@ -177,7 +177,7 @@ Articles this week:
 
     response = client.messages.create(
         model="claude-opus-4-7",
-        max_tokens=8000,
+        max_tokens=16000,
         messages=[{"role": "user", "content": prompt}],
     )
     if not response.content:
