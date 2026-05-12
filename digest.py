@@ -403,7 +403,7 @@ def send_personalized_via_resend(subscribers: list[dict], digest: dict, edition:
         return False
 
     date_str = datetime.now().strftime("%B %d, %Y")
-    subject  = f"NeuroDigest #{edition} — {date_str}"
+    subject  = f"NeuroDigest — {date_str}"
     sent     = 0
 
     for sub in subscribers:
@@ -445,7 +445,7 @@ def send_via_mailchimp(html_body: str, plain_body: str, edition: int) -> bool:
     base    = f"https://{dc}.api.mailchimp.com/3.0"
     auth    = ("anystring", api_key)
     date_str = datetime.now().strftime("%B %d, %Y")
-    subject = f"NeuroDigest #{edition} — {date_str}"
+    subject = f"NeuroDigest — {date_str}"
 
     # 1. Create campaign
     campaign = requests.post(f"{base}/campaigns", auth=auth, json={
