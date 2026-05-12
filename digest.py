@@ -391,8 +391,8 @@ def filter_digest_for_subscriber(digest: dict, topics: list[str]) -> dict:
 def send_personalized_via_resend(subscribers: list[dict], digest: dict, edition: int) -> bool:
     """Send per-subscriber personalized emails via Resend."""
     api_key   = os.getenv("RESEND_API_KEY")
-    site_url  = os.getenv("SITE_URL", "https://neurodigest.vercel.app")
-    from_addr = os.getenv("RESEND_FROM", "NeuroDigest <digest@neurodigest.io>")
+    site_url  = os.getenv("SITE_URL", "https://neuro-digest-phi.vercel.app")
+    from_addr = os.getenv("RESEND_FROM", "NeuroDigest <onboarding@resend.dev>")
     if not api_key:
         return False
     try:

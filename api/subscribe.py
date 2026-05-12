@@ -11,7 +11,7 @@ SUPABASE_KEY     = os.environ.get("SUPABASE_SERVICE_KEY", "")
 RESEND_API_KEY   = os.environ.get("RESEND_API_KEY", "")
 JWT_SECRET       = os.environ.get("JWT_SECRET", "change-me-in-env")
 SITE_URL         = os.environ.get("SITE_URL", "https://neurodigest.vercel.app")
-RESEND_FROM      = os.environ.get("RESEND_FROM", "NeuroDigest <noreply@neurodigest.io>")
+RESEND_FROM      = os.environ.get("RESEND_FROM", "NeuroDigest <onboarding@resend.dev>")
 
 ALL_TOPICS = [
     "Multiple Sclerosis", "Stroke", "Parkinson's Disease", "Epilepsy",
