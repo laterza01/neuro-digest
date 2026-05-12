@@ -24,26 +24,39 @@ load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 FEEDS = [
-    ("Neurology",                  "https://n.neurology.org/rss/current.xml"),
-    ("JAMA Neurology",             "https://jamanetwork.com/rss/site_3/67.xml"),
-    ("Lancet Neurology",           "https://www.thelancet.com/rssfeed/laneur_current.xml"),
-    ("Brain",                      "https://academic.oup.com/rss/site_5504/3051.xml"),
-    ("Annals of Neurology",        "https://onlinelibrary.wiley.com/feed/15318249/most-recent"),
-    ("Stroke",                     "https://www.ahajournals.org/action/showFeed?type=etoc&feed=rss&jc=str"),
-    ("Multiple Sclerosis Jour.",   "https://journals.sagepub.com/action/showFeed?ui=0&mi=ehikzz&ai=2dd&jc=msja&type=etoc&feed=rss"),
-    ("Nature Rev. Neurology",      "https://www.nature.com/nrneurol.rss"),
-    ("JAMA Neurol. (extra)",       "https://jamanetwork.com/rss/site_3/68.xml"),
-    ("Epilepsia",                  "https://onlinelibrary.wiley.com/feed/15281167/most-recent"),
-    ("Movement Disorders",         "https://onlinelibrary.wiley.com/feed/15318945/most-recent"),
-    ("Alzheimer's & Dementia",     "https://onlinelibrary.wiley.com/feed/15525279/most-recent"),
-    ("J. Neurology",               "https://link.springer.com/search.rss?facet-journal-id=415&query="),
-    ("Neurological Sciences",      "https://link.springer.com/search.rss?facet-journal-id=10072&query="),
-    ("Headache",                   "https://onlinelibrary.wiley.com/feed/15264610/most-recent"),
-    ("J. Peripheral Nervous Sys.", "https://onlinelibrary.wiley.com/feed/15298027/most-recent"),
+    # ── Q1 ────────────────────────────────────────────────────────────────────
+    ("Neurology",                   "https://n.neurology.org/rss/current.xml"),
+    ("JAMA Neurology",              "https://jamanetwork.com/rss/site_3/67.xml"),
+    ("Lancet Neurology",            "https://www.thelancet.com/rssfeed/laneur_current.xml"),
+    ("Brain",                       "https://academic.oup.com/rss/site_5504/3051.xml"),
+    ("Annals of Neurology",         "https://onlinelibrary.wiley.com/feed/15318249/most-recent"),
+    ("Stroke",                      "https://www.ahajournals.org/action/showFeed?type=etoc&feed=rss&jc=str"),
+    ("Nature Rev. Neurology",       "https://www.nature.com/nrneurol.rss"),
+    ("Epilepsia",                   "https://onlinelibrary.wiley.com/feed/15281167/most-recent"),
+    ("Movement Disorders",          "https://onlinelibrary.wiley.com/feed/15318945/most-recent"),
+    ("Alzheimer's & Dementia",      "https://onlinelibrary.wiley.com/feed/15525279/most-recent"),
+    ("Multiple Sclerosis Jour.",    "https://journals.sagepub.com/action/showFeed?ui=0&mi=ehikzz&ai=2dd&jc=msja&type=etoc&feed=rss"),
+    ("Acta Neuropathologica",       "https://link.springer.com/search.rss?facet-journal-id=401&query="),
+    # ── Q2 ────────────────────────────────────────────────────────────────────
+    ("European J. Neurology",       "https://onlinelibrary.wiley.com/feed/14681331/most-recent"),
+    ("Cephalalgia",                 "https://journals.sagepub.com/action/showFeed?ui=0&mi=ehikzz&ai=2dd&jc=cep&type=etoc&feed=rss"),
+    ("Parkinsonism & Related Dis.", "https://rss.sciencedirect.com/publication/science/13538020"),
+    ("MS & Related Disorders",      "https://rss.sciencedirect.com/publication/science/22110348"),
+    ("Neurocritical Care",          "https://link.springer.com/search.rss?facet-journal-id=12028&query="),
+    ("Muscle & Nerve",              "https://onlinelibrary.wiley.com/feed/10974598/most-recent"),
+    ("Neuromuscular Disorders",     "https://rss.sciencedirect.com/publication/science/09608966"),
+    ("J. Headache and Pain",        "https://link.springer.com/search.rss?facet-journal-id=10194&query="),
+    ("J. Alzheimer's Disease",      "https://journals.sagepub.com/action/showFeed?jc=jadA&type=etoc&feed=rss"),
+    ("J. Neuro-Oncology",           "https://link.springer.com/search.rss?facet-journal-id=11060&query="),
+    ("Epilepsy Research",           "https://rss.sciencedirect.com/publication/science/09201211"),
+    ("J. Peripheral Nervous Sys.",  "https://onlinelibrary.wiley.com/feed/15298027/most-recent"),
+    ("J. Neurology",                "https://link.springer.com/search.rss?facet-journal-id=415&query="),
+    ("Neurological Sciences",       "https://link.springer.com/search.rss?facet-journal-id=10072&query="),
+    ("Headache",                    "https://onlinelibrary.wiley.com/feed/15264610/most-recent"),
 ]
 
 DAYS_BACK    = 14
-MAX_ARTICLES = 60   # total cap across all feeds
+MAX_ARTICLES = 100  # total cap across all feeds
 OUTPUT_DIR   = Path("output") / datetime.now().strftime("%Y-%m-%d")
 EDITION_FILE = Path(__file__).resolve().parent / "edition.txt"
 
