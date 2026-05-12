@@ -472,9 +472,13 @@
         const data = await r.json();
 
         if (r.ok) {
-          noteEl.textContent = '✓ Check your inbox to confirm your subscription.';
-          noteEl.style.color = '#1a6632';
-          btnEl.closest('form').style.display = 'none';
+          if (data.preferences_url) {
+            window.location.href = data.preferences_url;
+          } else {
+            noteEl.textContent = '✓ Check your inbox to confirm your subscription.';
+            noteEl.style.color = '#1a6632';
+            btnEl.closest('form').style.display = 'none';
+          }
         } else {
           noteEl.textContent = data.error || 'Something went wrong. Please try again.';
           noteEl.style.color = '#c0392b';

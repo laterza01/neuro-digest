@@ -99,8 +99,8 @@ class handler(BaseHTTPRequestHandler):
             ).execute()
 
             # Send confirmation email via Resend
-            token = _make_token(email, "confirm")
-            confirm_url = f"{SITE_URL}/api/confirm?token={token}"
+            confirm_token = _make_token(email, "confirm")
+            confirm_url   = f"{SITE_URL}/api/confirm?token={confirm_token}"
 
             import resend
             resend.api_key = RESEND_API_KEY
@@ -111,7 +111,10 @@ class handler(BaseHTTPRequestHandler):
                 "html":    _confirmation_html(confirm_url),
             })
 
-            self._json({"ok": True})
+            # Return a preferences token so the frontend can redirect immediately
+            prefs_token = _make_token(email, "preferences")
+            self._json({"ok": True,
+                        "preferences_url": f"{SITE_URL}/preferences?token={prefs_token}"})
 
         except Exception as e:
             self._json({"error": str(e)}, 500)
