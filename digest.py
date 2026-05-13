@@ -610,6 +610,24 @@ def run():
         print("  No Supabase subscribers yet — falling back to Mailchimp broadcast...")
         send_email(html, plain, edition)
 
+    # Alert if subscribers exceed 300
+    try:
+        from supabase import create_client as _sc
+        _sb = _sc(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_KEY", ""))
+        count = _sb.table("subscribers").select("id", count="exact").eq("status", "confirmed").execute().count
+        if count and count >= 300:
+            import resend as _r
+            _r.api_key = os.getenv("RESEND_API_KEY", "")
+            _r.Emails.send({
+                "from":    os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>"),
+                "to":      "vincenzolate95l@gmail.com",
+                "subject": f"NeuroDigest — {count} subscribers!",
+                "html":    f"<p>NeuroDigest ha raggiunto <strong>{count} iscritti</strong>. Considera di passare al piano Resend a pagamento (50.000 email/mese).</p>",
+            })
+            print(f"  Subscriber alert sent ({count} subscribers)")
+    except Exception:
+        pass
+
     print(f"\nDone — Edition #{edition}")
 
 
