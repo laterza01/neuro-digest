@@ -719,6 +719,7 @@ def build_guidelines_html_email(
     guideline: dict,
     token: str = "",
     site_url: str = "",
+    **kwargs,
 ) -> str:
     """Build HTML for a Monthly Guidelines Edition email (gold accent, distinct from weekly)."""
     date_str     = datetime.now().strftime("%B %d, %Y")
@@ -815,6 +816,9 @@ def build_guidelines_html_email(
         if token else ""
     )
 
+    # Visual summary block (injected if visuals were generated)
+    visuals_block = kwargs.get("visuals_block", "")
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -866,6 +870,9 @@ def build_guidelines_html_email(
       {recs_html}
       {sources_html}
     </td></tr>
+
+    <!-- Visual summary (generated figures) -->
+    {visuals_block}
 
     <!-- breathing room -->
     <tr><td style="padding:12px 0"></td></tr>
@@ -943,7 +950,7 @@ def send_guidelines_edition(
     print(f"  Specific topic chosen: {specific}")
 
     date_str = datetime.now().strftime("%B %d, %Y")
-    subject  = f"NeuroDigest Guidelines — {specific} — {date_str}"
+    subject  = f"NeuroDigest Guidelines — {specific}"
     html_gl  = build_guidelines_html_email(data, site_url=site_url)
 
     # Save to Supabase so new subscribers joining this month can also receive it
