@@ -1519,23 +1519,31 @@ def run():
         send_email(html, plain, edition)
         return
 
-    # ── Step 3: timezone filter — only send to Monday 14:xx subscribers ───────
-    eligible = filter_by_local_time(all_subscribers, target_hour=14, target_weekday=0)
-    now_utc  = datetime.now(timezone.utc).strftime("%H:%M UTC")
-    print(f"  {len(eligible)} subscriber(s) at Monday 14:xx local time "
-          f"(current UTC: {now_utc})")
-
-    if not eligible:
-        print("  No subscribers in the 14:xx window this run — nothing to send.")
-        return
-
-    # ── Step 4: deduplication ─────────────────────────────────────────────────
+    # ── Step 3: deduplication ─────────────────────────────────────────────────
     already_sent: set[str] = set()
     if digest_id:
         already_sent = get_already_sent(sb, digest_id)
         if already_sent:
             print(f"  {len(already_sent)} subscriber(s) already sent this digest — "
                   "skipping them.")
+
+    # ── Step 4: decide who to send to ────────────────────────────────────────
+    # If the digest was just generated (fresh=True), send to ALL subscribers
+    # immediately — they all receive it at the same time (~14:30 Rome).
+    # On subsequent runs (digest already existed), use the timezone window to
+    # catch only new subscribers or those in different UTC offsets.
+    now_utc = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    if fresh:
+        eligible = all_subscribers
+        print(f"  Fresh digest — sending to all {len(eligible)} subscriber(s) now "
+              f"(UTC: {now_utc})")
+    else:
+        eligible = filter_by_local_time(all_subscribers, target_hour=14, target_weekday=0)
+        print(f"  {len(eligible)} subscriber(s) at Monday 14:xx local time "
+              f"(current UTC: {now_utc})")
+        if not eligible:
+            print("  No subscribers in the 14:xx window this run — nothing to send.")
+            return
 
     # ── Step 5: send ──────────────────────────────────────────────────────────
     # digest_data is always available: either freshly generated or restored from
