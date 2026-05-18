@@ -621,13 +621,22 @@ def fetch_supabase_subscribers() -> list[dict]:
         return []
     try:
         from supabase import create_client
-        sb     = create_client(url, key)
-        result = (
-            sb.table("subscribers")
-              .select("email,topics,timezone")
-              .eq("status", "confirmed")
-              .execute()
-        )
+        sb = create_client(url, key)
+        try:
+            result = (
+                sb.table("subscribers")
+                  .select("email,topics,timezone")
+                  .eq("status", "confirmed")
+                  .execute()
+            )
+        except Exception:
+            # timezone column might not exist yet — fall back without it
+            result = (
+                sb.table("subscribers")
+                  .select("email,topics")
+                  .eq("status", "confirmed")
+                  .execute()
+            )
         return result.data or []
     except Exception as e:
         print(f"  Supabase fetch error: {e}")
