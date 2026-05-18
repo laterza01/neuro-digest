@@ -2,8 +2,13 @@ name: NeuroDigest — Weekly Send
 
 on:
   schedule:
-    # Every Monday at 05:00 UTC = 07:00 Italian time (CEST, summer)
-    - cron: '0 5 * * 1'
+    # Fires every 30 minutes on Monday AND Tuesday UTC.
+    # Why Tuesday? Subscribers at UTC-10 / UTC-11 / UTC-12 experience
+    # their Monday 14:30 as late as 02:30 UTC Tuesday.
+    # The Python code checks each subscriber's local time independently
+    # and skips anyone who isn't in their Monday 14:xx window.
+    # sends_log deduplication ensures each subscriber gets exactly one email.
+    - cron: '0,30 * * * 1,2'
   workflow_dispatch:  # allows manual trigger from GitHub UI
 
 jobs:

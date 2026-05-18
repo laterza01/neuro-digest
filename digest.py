@@ -2,6 +2,15 @@
 NeuroDigest — weekly neurology literature digest.
 Fetches RSS feeds, synthesizes with Claude, sends personalized HTML emails.
 Monthly Guidelines Edition runs on the last Monday of each month.
+
+Timezone-aware delivery
+─────────────────────────────────────────────────────────────────
+The GitHub Actions cron fires every 30 min on Mon+Tue UTC.
+Each run:
+  1. Generates (or retrieves) today's digest — heavy work runs only once.
+  2. Filters subscribers whose local clock shows Monday 14:xx.
+  3. Skips anyone already in sends_log for this digest_id (deduplication).
+  4. Sends to the eligible batch and logs them.
 """
 
 import json
@@ -15,6 +24,7 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import anthropic
 import feedparser
@@ -184,9 +194,12 @@ Format:
 }}
 
 Rules:
-- Create one section per clinical area represented in the articles (3–7 sections)
-- Only include areas that have at least 1 relevant article
-- 1–3 themes per section
+- Create one section per clinical area that has genuinely noteworthy findings this week
+- If it's a busy week with many strong results across areas, include more sections (up to 8–10)
+- If it's a quiet week, 2–3 well-developed sections are better than padding with minor findings
+- Quality over quantity: only include a section if there is something clinically meaningful to say
+- Only include areas that have at least 1 relevant article worth citing
+- 1–3 themes per section depending on how much there is to say
 - Plain prose, no markdown inside strings, no bullet hyphens
 - Implication: action-oriented
 - Sources: only articles you actually cite; include doi when you can extract it from the URL or know it
@@ -232,118 +245,270 @@ SECTION_PALETTE = [
 # Guidelines Edition accent — dark gold, visually distinct from weekly digest
 GUIDELINES_ACC = "#8b6914"
 
+# ── Responsive CSS (injected into <head> of every email) ─────────────────────
+# Classes used:
+#   ep  → content cell          (padding 36px 48px → 20px sides on mobile)
+#   eh  → header cell
+#   ed  → date/edition td       (hidden on mobile)
+#   hl  → section headline      (21px → 18px)
+#   bt  → body paragraph        (15px → 16px, prevents iOS auto-zoom)
+#   ta  → take-home dark block
+#   ft  → footer cell
+#   toc → table-of-contents cell
+MOBILE_CSS = """
+<style>
+@media only screen and (max-width:620px){
+  .ep{padding-left:20px!important;padding-right:20px!important}
+  .eh{padding:18px 20px!important}
+  .ed{display:none!important}
+  .hl{font-size:18px!important;line-height:1.35!important}
+  .bt{font-size:16px!important;line-height:1.8!important}
+  .ta{padding:24px 20px!important}
+  .ft{padding:16px 20px!important}
+  .toc{padding:16px 20px!important}
+}
+</style>"""
+
+
+def ensure_unsubscribe(html: str, token: str, site_url: str) -> str:
+    """
+    Safety net: if the rendered HTML doesn't contain an unsubscribe link,
+    inject one just before </body>. Called on every outbound email.
+    """
+    unsub_url  = f"{site_url}/api/unsubscribe?token={token}"
+    manage_url = f"{site_url}/preferences?token={token}"
+    if not token or unsub_url in html:
+        return html
+    inject = (
+        f'<p style="text-align:center;font-size:13px;color:#555;'
+        f'font-family:Helvetica,Arial,sans-serif;margin:0;padding:18px 48px;'
+        f'background:#f5f5f3;border-top:2px solid #e0e0dc">'
+        f'<strong style="color:#333;font-family:Georgia,serif">NeuroDigest</strong>'
+        f' &nbsp;&middot;&nbsp; '
+        f'<a href="{manage_url}" style="color:#555;text-decoration:none">Manage topics</a>'
+        f' &nbsp;&middot;&nbsp; '
+        f'<a href="{unsub_url}" style="color:#555;text-decoration:none">Unsubscribe</a>'
+        f'</p>'
+    )
+    return html.replace("</body>", inject + "</body>")
+
+
+def _preheader(text: str) -> str:
+    """Hidden inbox-preview line. Soft-hyphen padding stops clients pulling body text."""
+    safe   = (text or "")[:120]
+    filler = "&#847;" * 60
+    return (
+        f'<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;'
+        f'font-size:1px;line-height:1px;color:#1a1a2e">'
+        f'{safe}{filler}'
+        f'</div>'
+    )
+
 
 def topic_section_html(topic: str, data: dict, color: str = ACC) -> str:
+    """
+    Render one clinical-area section in professional journal style:
+      • 4 px left accent bar (topic colour) — email-safe table-cell trick
+      • Category label in small-caps above the headline
+      • Body prose + implication callout
+      • Sources as a clean inline footnote line
+    """
+    # ── Themes ────────────────────────────────────────────────────────────────
     themes_html = ""
     for th in data.get("themes", []):
         body_paras = "".join(
-            f'<p style="margin:0 0 12px 0;font-size:15px;line-height:1.75;color:{BODY};'
-            f'font-family:Georgia,\'Times New Roman\',serif">{p.strip()}</p>'
+            f'<p class="bt" style="margin:0 0 13px;font-size:15px;line-height:1.8;'
+            f'color:#2c2c2c;font-family:Georgia,\'Times New Roman\',serif">'
+            f'{p.strip()}</p>'
             for p in th["body"].split("\n") if p.strip()
         )
         implication = th.get("implication", "")
-        impl_html = ""
+        impl_html   = ""
         if implication:
-            impl_html = (
-                f'<p style="margin:12px 0 0 0;padding:0 0 0 16px;'
-                f'border-left:2px solid {color};font-size:14px;color:#444;'
-                f'line-height:1.7;font-style:italic;'
-                f'font-family:Georgia,\'Times New Roman\',serif">{implication}</p>'
+            # Callout box: light tinted background + left rule
+            impl_html = f"""
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="margin:14px 0 4px">
+              <tr>
+                <td style="width:3px;background:{color}"></td>
+                <td style="padding:10px 14px;background:#f7f7f5">
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#444;
+                            font-style:italic;
+                            font-family:Georgia,'Times New Roman',serif">{implication}</p>
+                </td>
+              </tr>
+            </table>"""
+
+        theme_title = th.get("title", "")
+        title_html  = ""
+        if theme_title:
+            title_html = (
+                f'<p style="margin:0 0 8px;font-size:10px;font-weight:700;'
+                f'letter-spacing:2px;text-transform:uppercase;color:{color};'
+                f'font-family:Helvetica,Arial,sans-serif">{theme_title}</p>'
             )
         themes_html += f"""
-        <div style="margin-bottom:28px">
-          <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;letter-spacing:2px;
-                    color:{color};text-transform:uppercase;
-                    font-family:Helvetica,Arial,sans-serif">{th['title']}</p>
+        <div style="margin-bottom:24px">
+          {title_html}
           {body_paras}
           {impl_html}
         </div>"""
 
+    # ── Sources — clean inline footnote line ──────────────────────────────────
     sources_html = ""
-    sources = data.get("sources", [])
+    sources      = data.get("sources", [])
     if sources:
-        items = ""
+        links = []
         for s in sources:
-            if not s.get("title"):
+            if not s.get("title") and not s.get("journal"):
                 continue
-            # Resolve link: prefer DOI (extracted from URL or provided), fall back to URL
             doi  = s.get("doi") or extract_doi(s.get("url", ""))
             href = f"https://doi.org/{doi}" if doi else s.get("url", "")
-            journal_label = (
-                f'<a href="{href}" style="font-size:10px;font-weight:700;letter-spacing:1px;'
-                f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif;'
-                f'white-space:nowrap;text-decoration:none">{s["journal"]}</a>'
-                if href else
-                f'<span style="font-size:10px;font-weight:700;letter-spacing:1px;'
-                f'text-transform:uppercase;color:#aaa;font-family:Helvetica,Arial,sans-serif;'
-                f'white-space:nowrap">{s["journal"]}</span>'
+            label = s.get("journal") or s.get("title", "")
+            if href:
+                links.append(
+                    f'<a href="{href}" style="color:{color};text-decoration:none;'
+                    f'font-weight:600">{label}</a>'
+                )
+            else:
+                links.append(
+                    f'<span style="color:#999">{label}</span>'
+                )
+        if links:
+            sources_html = (
+                f'<p style="margin:18px 0 0;font-size:11px;color:#999;'
+                f'font-family:Helvetica,Arial,sans-serif;line-height:1.6">'
+                f'<span style="text-transform:uppercase;letter-spacing:1px;'
+                f'font-size:9px;font-weight:700;color:#bbb">Sources&nbsp;&nbsp;</span>'
+                + ' &nbsp;&middot;&nbsp; '.join(links)
+                + '</p>'
             )
-            items += (
-                f'<tr>'
-                f'<td style="padding:5px 0;vertical-align:top;padding-right:10px">'
-                f'{journal_label}'
-                f'</td>'
-                f'<td style="padding:5px 0">'
-                f'<span style="font-size:12px;color:#555;'
-                f'font-family:Helvetica,Arial,sans-serif;line-height:1.5">{s["title"]}</span>'
-                f'</td>'
-                f'</tr>'
-            )
-        if items:
-            sources_html = f"""
-            <div style="margin-top:20px;padding-top:14px;border-top:1px solid #ebebeb">
-              <table cellpadding="0" cellspacing="0" border="0" width="100%"
-                     style="border-collapse:collapse">{items}</table>
-            </div>"""
 
+    # ── Section shell: left accent bar + content ──────────────────────────────
     return f"""
-    <tr><td style="padding:32px 40px 0">
-      <p style="margin:0 0 6px 0;font-size:10px;font-weight:700;letter-spacing:2px;
-                text-transform:uppercase;color:{color};
-                font-family:Helvetica,Arial,sans-serif">{topic}</p>
-      <p style="margin:0 0 24px 0;font-size:22px;font-weight:700;color:{NAV};line-height:1.3;
-                font-family:Georgia,'Times New Roman',serif">{data.get('headline','')}</p>
-      {themes_html}
-      {sources_html}
+    <tr><td class="ep" style="padding:36px 48px 0">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <!-- Left accent bar (4 px, topic colour) -->
+          <td style="width:4px;background:{color};border-radius:2px" width="4"></td>
+          <!-- Content -->
+          <td style="padding:2px 0 0 22px">
+            <p style="margin:0 0 5px;font-size:10px;font-weight:700;letter-spacing:2.5px;
+                      text-transform:uppercase;color:{color};
+                      font-family:Helvetica,Arial,sans-serif">{topic}</p>
+            <p class="hl" style="margin:0 0 20px;font-size:21px;font-weight:700;
+                      color:{NAV};line-height:1.3;
+                      font-family:Georgia,'Times New Roman',serif">
+              {data.get('headline', '')}
+            </p>
+            {themes_html}
+            {sources_html}
+          </td>
+        </tr>
+      </table>
     </td></tr>
-    <tr><td style="padding:28px 40px 0">
-      <div style="border-top:1px solid #ebebeb"></div>
+    <tr><td class="ep" style="padding:32px 48px 0">
+      <div style="border-top:1px solid #e8e8e4"></div>
     </td></tr>"""
 
 
 def build_html_email(digest: dict, edition: int,
-                     preferences_token: str = "", site_url: str = "") -> str:
-    date_str  = datetime.now().strftime("%B %d, %Y")
+                     preferences_token: str = "", site_url: str = "",
+                     also_this_week: list[dict] | None = None) -> str:
+    date_str      = datetime.now().strftime("%B %d, %Y")
     single_action = digest.get("bottom_line", "")
+    preheader_txt = single_action or "Your weekly neurology literature briefing."
+    section_list  = digest.get("sections", [])
 
+    # ── Build section HTML ────────────────────────────────────────────────────
     sections = ""
-    for i, sec in enumerate(digest.get("sections", [])):
+    for i, sec in enumerate(section_list):
         color = SECTION_PALETTE[i % len(SECTION_PALETTE)]
         sections += topic_section_html(sec["topic"], sec, color=color)
 
+    # ── Table of contents ─────────────────────────────────────────────────────
+    toc_items = ""
+    for i, sec in enumerate(section_list):
+        color = SECTION_PALETTE[i % len(SECTION_PALETTE)]
+        toc_items += (
+            f'<tr>'
+            f'<td style="padding:4px 12px 4px 0;vertical-align:top;width:1%;white-space:nowrap">'
+            f'<span style="font-size:9px;font-weight:700;letter-spacing:1.5px;'
+            f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif">'
+            f'{sec["topic"]}</span></td>'
+            f'<td style="padding:4px 0;vertical-align:top">'
+            f'<span style="font-size:12px;color:#555;font-family:Helvetica,Arial,sans-serif;'
+            f'line-height:1.5">{sec.get("headline","")}</span></td>'
+            f'</tr>'
+        )
+
+    toc_html = ""
+    if toc_items:
+        toc_html = f"""
+    <tr><td class="toc" style="padding:20px 48px;background:#f5f5f3;
+                               border-bottom:1px solid #e4e4e0">
+      <p style="margin:0 0 12px;font-size:9px;font-weight:700;letter-spacing:2.5px;
+                text-transform:uppercase;color:#aaa;
+                font-family:Helvetica,Arial,sans-serif">In This Issue</p>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%"
+             style="border-collapse:collapse">{toc_items}</table>
+    </td></tr>"""
+
+    # ── "Also this week" teasers (only for topic-filtered subscribers) ────────
+    also_html = ""
+    if also_this_week:
+        rows = ""
+        for i, sec in enumerate(also_this_week):
+            color = SECTION_PALETTE[(len(section_list) + i) % len(SECTION_PALETTE)]
+            rows += (
+                f'<tr>'
+                f'<td style="padding:7px 16px 7px 0;vertical-align:top;width:1%;white-space:nowrap">'
+                f'<span style="font-size:9px;font-weight:700;letter-spacing:1.5px;'
+                f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif">'
+                f'{sec["topic"]}</span></td>'
+                f'<td style="padding:7px 0;vertical-align:top">'
+                f'<span style="font-size:12px;color:#666;font-family:Helvetica,Arial,sans-serif;'
+                f'line-height:1.5">{sec.get("headline","")}</span></td>'
+                f'</tr>'
+            )
+        also_html = f"""
+    <tr><td class="ep" style="padding:28px 48px 0">
+      <div style="border-top:1px solid #e8e8e4"></div>
+    </td></tr>
+    <tr><td class="toc" style="padding:20px 48px 28px">
+      <p style="margin:0 0 12px;font-size:9px;font-weight:700;letter-spacing:2.5px;
+                text-transform:uppercase;color:#aaa;
+                font-family:Helvetica,Arial,sans-serif">Also This Week</p>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%"
+             style="border-collapse:collapse">{rows}</table>
+    </td></tr>"""
+
+    # ── Take-Home ─────────────────────────────────────────────────────────────
     action_html = ""
     if single_action:
         action_html = f"""
-    <tr><td style="padding:32px 40px;background:{NAV}">
-      <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;letter-spacing:2px;
+    <tr><td class="ta" style="padding:32px 48px;background:{NAV}">
+      <p style="margin:0 0 10px;font-size:9px;font-weight:700;letter-spacing:2.5px;
                 text-transform:uppercase;color:{ACC};
                 font-family:Helvetica,Arial,sans-serif">This Week's Take-Home</p>
-      <p style="margin:0;font-size:17px;color:{WHITE};line-height:1.65;
-                font-family:Georgia,'Times New Roman',serif;font-style:italic">{single_action}</p>
+      <p class="bt" style="margin:0;font-size:17px;color:{WHITE};line-height:1.7;
+                font-family:Georgia,'Times New Roman',serif;font-style:italic">
+        {single_action}
+      </p>
     </td></tr>"""
 
+    # ── Footer links ──────────────────────────────────────────────────────────
     manage_link = (
-        f'&nbsp;&middot;&nbsp;'
         f'<a href="{site_url}/preferences?token={preferences_token}" '
-        f'style="color:#888;text-decoration:none">Manage topics</a>'
+        f'style="color:#999;text-decoration:none">Manage topics</a>'
         if preferences_token else ""
     )
     unsub_link = (
-        f'&nbsp;&middot;&nbsp;'
         f'<a href="{site_url}/api/unsubscribe?token={preferences_token}" '
-        f'style="color:#888;text-decoration:none">Unsubscribe</a>'
+        f'style="color:#999;text-decoration:none">Unsubscribe</a>'
         if preferences_token else ""
     )
+    sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -351,54 +516,67 @@ def build_html_email(digest: dict, edition: int,
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NeuroDigest — {date_str}</title>
+{MOBILE_CSS}
 </head>
 <body style="margin:0;padding:0;background:{BG};-webkit-text-size-adjust:100%">
+{_preheader(preheader_txt)}
 <table width="100%" cellpadding="0" cellspacing="0" border="0"
        style="background:{BG};min-height:100%">
-<tr><td align="center" style="padding:40px 16px">
+<tr><td align="center" style="padding:24px 8px">
 
   <table width="100%" cellpadding="0" cellspacing="0" border="0"
-         style="max-width:640px;background:{WHITE};
-                border:1px solid #e0e0de;
-                font-family:Georgia,'Times New Roman',serif">
+         style="max-width:640px;background:{WHITE};border:1px solid #ddddd8">
 
-    <!-- Header -->
-    <tr><td style="padding:28px 40px 24px;border-bottom:3px solid {ACC}">
+    <!-- ── Masthead ─────────────────────────────────────────────────────── -->
+    <tr><td class="eh" style="padding:22px 48px 20px;background:{NAV}">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td>
-            <p style="margin:0;font-size:26px;font-weight:700;color:{NAV};letter-spacing:-0.5px;
+          <td style="vertical-align:bottom">
+            <p style="margin:0;font-size:28px;font-weight:700;color:{WHITE};
+                      letter-spacing:-0.5px;
                       font-family:Georgia,'Times New Roman',serif">NeuroDigest</p>
-            <p style="margin:4px 0 0;font-size:11px;letter-spacing:1.5px;
-                      text-transform:uppercase;color:#888;
+            <p style="margin:5px 0 0;font-size:10px;letter-spacing:2px;
+                      text-transform:uppercase;color:{ACC};
                       font-family:Helvetica,Arial,sans-serif">
               Weekly Neurology Literature Briefing
             </p>
           </td>
-          <td align="right" style="vertical-align:middle">
-            <p style="margin:0;font-size:12px;color:#aaa;
+          <td class="ed" align="right" style="vertical-align:bottom">
+            <p style="margin:0;font-size:11px;color:#8888aa;
+                      font-family:Helvetica,Arial,sans-serif">Edition #{edition}</p>
+            <p style="margin:3px 0 0;font-size:11px;color:#8888aa;
                       font-family:Helvetica,Arial,sans-serif">{date_str}</p>
           </td>
         </tr>
       </table>
     </td></tr>
+    <!-- Red rule below masthead -->
+    <tr><td style="height:3px;background:{ACC};font-size:0;line-height:0">&nbsp;</td></tr>
 
-    <!-- Topic sections -->
+    <!-- ── Table of contents ────────────────────────────────────────────── -->
+    {toc_html}
+
+    <!-- ── Clinical sections ────────────────────────────────────────────── -->
     {sections}
 
-    <!-- breathing room before action block -->
-    <tr><td style="padding:12px 0"></td></tr>
+    <!-- ── Also this week ───────────────────────────────────────────────── -->
+    {also_html}
 
-    <!-- Take-Home -->
+    <tr><td style="padding:16px 0 0"></td></tr>
+
+    <!-- ── Take-Home ────────────────────────────────────────────────────── -->
     {action_html}
 
-    <!-- Footer -->
-    <tr><td style="padding:20px 40px;border-top:1px solid #ebebeb;background:#fafaf9">
-      <p style="margin:0;font-size:11px;color:#aaa;
-                font-family:Helvetica,Arial,sans-serif;line-height:1.8;text-align:center">
-        <strong style="color:#888">NeuroDigest</strong>
-        {manage_link}
-        {unsub_link}
+    <!-- ── Footer ───────────────────────────────────────────────────────── -->
+    <tr><td class="ft" style="padding:22px 48px;background:#f5f5f3;
+                               border-top:2px solid #e0e0dc">
+      <p style="margin:0;font-size:13px;color:#555;
+                font-family:Helvetica,Arial,sans-serif;line-height:2;text-align:center">
+        <strong style="color:#333;font-family:Georgia,'Times New Roman',serif">
+          NeuroDigest
+        </strong>
+        &nbsp;&middot;&nbsp;
+        {manage_link}{sep}{unsub_link}
       </p>
     </td></tr>
 
@@ -436,7 +614,7 @@ def build_plain_text(digest: dict, edition: int) -> str:
 
 # ── Supabase subscriber management ───────────────────────────────────────────
 def fetch_supabase_subscribers() -> list[dict]:
-    """Return confirmed subscribers [{email, topics}] from Supabase."""
+    """Return confirmed subscribers [{email, topics, timezone}] from Supabase."""
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_SERVICE_KEY")
     if not url or not key:
@@ -444,11 +622,128 @@ def fetch_supabase_subscribers() -> list[dict]:
     try:
         from supabase import create_client
         sb     = create_client(url, key)
-        result = sb.table("subscribers").select("email,topics").eq("status", "confirmed").execute()
+        result = (
+            sb.table("subscribers")
+              .select("email,topics,timezone")
+              .eq("status", "confirmed")
+              .execute()
+        )
         return result.data or []
     except Exception as e:
         print(f"  Supabase fetch error: {e}")
         return []
+
+
+# ── Timezone-aware filtering ──────────────────────────────────────────────────
+
+def filter_by_local_time(
+    subscribers: list[dict],
+    target_hour: int = 14,
+    target_weekday: int = 0,   # 0 = Monday
+) -> list[dict]:
+    """
+    Return subscribers for whom it is currently target_hour:xx on target_weekday
+    in their local timezone.
+
+    The cron fires at :00 and :30 past each hour, so checking the hour (not the
+    minute) gives a clean 30-minute window. The sends_log dedup prevents any
+    subscriber receiving the digest more than once regardless.
+
+    Timezone fallback order:
+      1. sub["timezone"]  (stored at signup via browser Intl API)
+      2. 'Europe/Rome'    (default for subscribers who signed up before
+                           the timezone column was added)
+    """
+    now = datetime.now(timezone.utc)
+    eligible: list[dict] = []
+    for sub in subscribers:
+        raw_tz = (sub.get("timezone") or "").strip() or "Europe/Rome"
+        try:
+            local_now = now.astimezone(ZoneInfo(raw_tz))
+        except (ZoneInfoNotFoundError, Exception):
+            # Invalid or unknown timezone string — fall back to Europe/Rome
+            local_now = now.astimezone(ZoneInfo("Europe/Rome"))
+        if local_now.weekday() == target_weekday and local_now.hour == target_hour:
+            eligible.append(sub)
+    return eligible
+
+
+# ── Deduplication helpers ─────────────────────────────────────────────────────
+
+def get_already_sent(sb, digest_id: int) -> set[str]:
+    """Return set of emails that already have a sends_log entry for this digest."""
+    try:
+        rows = (
+            sb.table("sends_log")
+              .select("email")
+              .eq("digest_id", digest_id)
+              .execute()
+        )
+        return {r["email"] for r in (rows.data or [])}
+    except Exception as e:
+        print(f"  Could not read sends_log: {e}")
+        return set()
+
+
+def log_sends(sb, emails: list[str], digest_id: int) -> None:
+    """Insert sends_log rows; ignore conflicts (UNIQUE constraint is the guard)."""
+    if not emails:
+        return
+    try:
+        sb.table("sends_log").upsert(
+            [{"email": e, "digest_id": digest_id} for e in emails],
+            on_conflict="email,digest_id",
+            ignore_duplicates=True,
+        ).execute()
+    except Exception as e:
+        print(f"  Could not write sends_log: {e}")
+
+
+# ── Digest persistence (generate once, reuse across hourly runs) ──────────────
+
+def get_todays_digest(sb) -> dict | None:
+    """
+    Return the digest row already generated today, or None if not yet created.
+    Returns: {id, edition_num, subject, html, plain, digest_json}
+    """
+    today_start = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00+00:00")
+    today_end   = datetime.now(timezone.utc).strftime("%Y-%m-%dT23:59:59+00:00")
+    try:
+        rows = (
+            sb.table("digests")
+              .select("id,edition_num,subject,html,plain,digest_json")
+              .gte("sent_at", today_start)
+              .lte("sent_at", today_end)
+              .order("sent_at", desc=True)
+              .limit(1)
+              .execute()
+        )
+        if rows.data:
+            return rows.data[0]
+    except Exception as e:
+        print(f"  Could not query today's digest: {e}")
+    return None
+
+
+def save_digest_to_supabase(sb, subject: str, html: str, plain: str,
+                             edition_num: int, digest_data: dict) -> int | None:
+    """
+    Persist the generated digest (including structured JSON for per-subscriber
+    topic filtering in subsequent hourly runs) and return its Supabase row id.
+    """
+    try:
+        row = sb.table("digests").insert({
+            "subject":     subject,
+            "html":        html,
+            "plain":       plain,
+            "edition_num": edition_num,
+            "digest_json": json.dumps(digest_data),   # enables personalisation on all runs
+        }).execute()
+        if row.data:
+            return row.data[0]["id"]
+    except Exception as e:
+        print(f"  Could not save digest to Supabase: {e}")
+    return None
 
 
 def generate_preferences_token(email: str) -> str:
@@ -468,20 +763,51 @@ def generate_preferences_token(email: str) -> str:
         return ""
 
 
-def filter_digest_for_subscriber(digest: dict, topics: list[str]) -> dict:
-    """Return digest copy with sections limited to the subscriber's chosen topics."""
+def filter_digest_for_subscriber(
+    digest: dict, topics: list[str]
+) -> tuple[dict, list[dict]]:
+    """
+    Filter the digest to the subscriber's chosen topics.
+
+    Returns:
+        (personalized_digest, excluded_sections)
+        excluded_sections — the sections not shown, used for "Also this week" teasers.
+        If topics is empty (subscriber chose all), excluded is always [].
+    """
     if not topics:
-        return digest
+        return digest, []
     lc = [t.lower() for t in topics]
-    filtered = [
-        sec for sec in digest.get("sections", [])
+    all_sections = digest.get("sections", [])
+    included = [
+        sec for sec in all_sections
         if any(t in sec["topic"].lower() or sec["topic"].lower() in t for t in lc)
     ]
-    return {**digest, "sections": filtered or digest.get("sections", [])}
+    if not included:
+        # No match — send full digest, nothing to tease
+        return digest, []
+    excluded = [sec for sec in all_sections if sec not in included]
+    return {**digest, "sections": included}, excluded
 
 
-def send_personalized_via_resend(subscribers: list[dict], digest: dict, edition: int) -> bool:
-    """Send per-subscriber personalized emails via Resend."""
+def send_personalized_via_resend(
+    subscribers: list[dict],
+    digest: dict,
+    edition: int,
+    *,
+    sb=None,
+    digest_id: int | None = None,
+    already_sent: set[str] | None = None,
+) -> bool:
+    """
+    Send per-subscriber personalized emails via Resend.
+
+    When sb + digest_id are provided the function:
+      - skips subscribers already in sends_log for this digest_id
+      - logs newly sent addresses to sends_log after each successful send
+
+    already_sent: pre-fetched set of emails to skip (avoids a DB round-trip per
+                  subscriber; pass get_already_sent(sb, digest_id) before calling).
+    """
     api_key   = os.getenv("RESEND_API_KEY")
     site_url  = os.getenv("SITE_URL", "https://neuro-digest-phi.vercel.app")
     from_addr = os.getenv("RESEND_FROM", "NeuroDigest <onboarding@resend.dev>")
@@ -494,19 +820,35 @@ def send_personalized_via_resend(subscribers: list[dict], digest: dict, edition:
         print("  resend package not installed — run: pip install resend")
         return False
 
-    date_str = datetime.now().strftime("%B %d, %Y")
-    subject  = f"NeuroDigest — {date_str}"
-    sent     = 0
+    date_str   = datetime.now().strftime("%B %d, %Y")
+    subject    = f"NeuroDigest — {date_str}"
+    sent       = 0
+    skipped    = 0
+    sent_addrs: list[str] = []
+
+    skip_set = already_sent or set()
 
     for sub in subscribers:
         email  = sub["email"]
         topics = sub.get("topics") or []
-        token  = generate_preferences_token(email)
 
-        personalized = filter_digest_for_subscriber(digest, topics)
-        html         = build_html_email(personalized, edition,
-                                        preferences_token=token, site_url=site_url)
-        plain        = build_plain_text(personalized, edition)
+        # ── Deduplication: skip if already sent this digest ───────────────────
+        if email in skip_set:
+            skipped += 1
+            continue
+
+        token                  = generate_preferences_token(email)
+        personalized, excluded = filter_digest_for_subscriber(digest, topics)
+        # Show "Also This Week" teasers only when subscriber chose 1–2 topics
+        # (email would otherwise feel thin); with 3+ topics the content is already rich
+        show_also = excluded if len(topics) <= 2 else []
+        html      = build_html_email(
+                        personalized, edition,
+                        preferences_token=token, site_url=site_url,
+                        also_this_week=show_also,
+                    )
+        html      = ensure_unsubscribe(html, token, site_url)
+        plain     = build_plain_text(personalized, edition)
 
         try:
             resend.Emails.send({
@@ -517,11 +859,19 @@ def send_personalized_via_resend(subscribers: list[dict], digest: dict, edition:
                 "text":    plain,
             })
             sent += 1
+            sent_addrs.append(email)
+            skip_set.add(email)        # guard against duplicate entries in input list
             time.sleep(0.15)
         except Exception as e:
             print(f"  Resend error ({email}): {e}")
 
-    print(f"  Sent {sent}/{len(subscribers)} personalized emails via Resend")
+    # ── Log successful sends to deduplication table ───────────────────────────
+    if sb and digest_id and sent_addrs:
+        log_sends(sb, sent_addrs, digest_id)
+
+    total = len(subscribers)
+    print(f"  Sent {sent}/{total} personalized emails via Resend "
+          f"(skipped {skipped} already-sent)")
     return sent > 0
 
 
@@ -620,6 +970,23 @@ def is_last_monday_of_month() -> bool:
     if today.weekday() != 0:   # 0 = Monday
         return False
     return (today + timedelta(days=7)).month != today.month
+
+
+def guideline_sent_this_month(sb) -> bool:
+    """Return True if a guidelines edition was already sent during the current month."""
+    try:
+        now   = datetime.now(timezone.utc)
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+        rows  = (
+            sb.table("guidelines_log")
+              .select("id")
+              .gte("sent_at", start)
+              .limit(1)
+              .execute()
+        )
+        return bool(rows.data)
+    except Exception:
+        return False
 
 
 def guidelines_topic_this_month() -> str:
@@ -731,22 +1098,28 @@ def build_guidelines_html_email(
     themes_html = ""
     for th in guideline.get("themes", []):
         body_paras = "".join(
-            f'<p style="margin:0 0 12px 0;font-size:15px;line-height:1.75;color:{BODY};'
+            f'<p class="bt" style="margin:0 0 13px 0;font-size:15px;line-height:1.8;color:#2c2c2c;'
             f'font-family:Georgia,\'Times New Roman\',serif">{p.strip()}</p>'
             for p in th["body"].split("\n") if p.strip()
         )
         impl = th.get("implication", "")
         impl_html = ""
         if impl:
-            impl_html = (
-                f'<p style="margin:12px 0 0 0;padding:0 0 0 16px;'
-                f'border-left:2px solid {color};font-size:14px;color:#444;'
-                f'line-height:1.7;font-style:italic;'
-                f'font-family:Georgia,\'Times New Roman\',serif">{impl}</p>'
-            )
+            impl_html = f"""
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="margin:14px 0 4px">
+              <tr>
+                <td style="width:3px;background:{color}"></td>
+                <td style="padding:10px 14px;background:#f7f7f5">
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#444;
+                            font-style:italic;
+                            font-family:Georgia,'Times New Roman',serif">{impl}</p>
+                </td>
+              </tr>
+            </table>"""
         themes_html += f"""
         <div style="margin-bottom:28px">
-          <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;letter-spacing:2px;
+          <p style="margin:0 0 10px 0;font-size:11px;font-weight:700;letter-spacing:2px;
                     color:{color};text-transform:uppercase;
                     font-family:Helvetica,Arial,sans-serif">{th['title']}</p>
           {body_paras}
@@ -758,7 +1131,7 @@ def build_guidelines_html_email(
     recs_html = ""
     if recs:
         rec_items = "".join(
-            f'<li style="margin:0 0 10px 0;font-size:14px;color:#333;line-height:1.65;'
+            f'<li style="margin:0 0 10px 0;font-size:15px;color:#333;line-height:1.7;'
             f'font-family:Helvetica,Arial,sans-serif">{r}</li>'
             for r in recs
         )
@@ -792,32 +1165,35 @@ def build_guidelines_html_email(
             )
             items += (
                 f'<tr>'
-                f'<td style="padding:5px 0;vertical-align:top;padding-right:12px">{label}</td>'
+                f'<td style="padding:5px 14px 5px 0;vertical-align:top;width:1%">'
+                f'{label}</td>'
                 f'<td style="padding:5px 0;font-size:12px;color:#555;'
-                f'font-family:Helvetica,Arial,sans-serif;line-height:1.5">{s.get("title", "")}</td>'
+                f'font-family:Helvetica,Arial,sans-serif;line-height:1.55">'
+                f'{s.get("title", "")}</td>'
                 f'</tr>'
             )
         sources_html = f"""
-        <div style="margin-top:20px;padding-top:14px;border-top:1px solid #ebebeb">
+        <div style="margin-top:20px;padding-top:14px;border-top:1px solid #e8e4d8">
+          <p style="margin:0 0 8px;font-size:9px;font-weight:700;letter-spacing:2px;
+                    text-transform:uppercase;color:#bbb;
+                    font-family:Helvetica,Arial,sans-serif">Sources</p>
           <table cellpadding="0" cellspacing="0" border="0" width="100%"
                  style="border-collapse:collapse">{items}</table>
         </div>"""
 
-    manage_link = (
-        f'&nbsp;&middot;&nbsp;'
+    manage_link   = (
         f'<a href="{site_url}/preferences?token={token}" '
-        f'style="color:#888;text-decoration:none">Manage topics</a>'
+        f'style="color:#999;text-decoration:none">Manage topics</a>'
         if token else ""
     )
-    unsub_link = (
-        f'&nbsp;&middot;&nbsp;'
+    unsub_link    = (
         f'<a href="{site_url}/api/unsubscribe?token={token}" '
-        f'style="color:#888;text-decoration:none">Unsubscribe</a>'
+        f'style="color:#999;text-decoration:none">Unsubscribe</a>'
         if token else ""
     )
-
-    # Visual summary block (injected if visuals were generated)
+    sep           = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
     visuals_block = kwargs.get("visuals_block", "")
+    preheader_txt = guideline.get("bottom_line") or f"Guidelines Edition — {specific}"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -825,76 +1201,95 @@ def build_guidelines_html_email(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NeuroDigest Guidelines — {specific}</title>
+{MOBILE_CSS}
 </head>
 <body style="margin:0;padding:0;background:{BG};-webkit-text-size-adjust:100%">
+{_preheader(preheader_txt)}
 <table width="100%" cellpadding="0" cellspacing="0" border="0"
        style="background:{BG};min-height:100%">
-<tr><td align="center" style="padding:40px 16px">
+<tr><td align="center" style="padding:24px 8px">
 
   <table width="100%" cellpadding="0" cellspacing="0" border="0"
-         style="max-width:640px;background:{WHITE};
-                border:1px solid #dfc97a;
-                font-family:Georgia,'Times New Roman',serif">
+         style="max-width:640px;background:{WHITE};border:1px solid #ddddd8">
 
-    <!-- Header -->
-    <tr><td style="padding:28px 40px 24px;border-bottom:3px solid {color}">
+    <!-- ── Masthead ─────────────────────────────────────────────────────── -->
+    <tr><td class="eh" style="padding:22px 48px 20px;background:{NAV}">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td>
-            <p style="margin:0;font-size:26px;font-weight:700;color:{NAV};letter-spacing:-0.5px;
+          <td style="vertical-align:bottom">
+            <p style="margin:0;font-size:28px;font-weight:700;color:{WHITE};
+                      letter-spacing:-0.5px;
                       font-family:Georgia,'Times New Roman',serif">NeuroDigest</p>
-            <p style="margin:4px 0 0;font-size:11px;letter-spacing:1.5px;
+            <p style="margin:5px 0 0;font-size:10px;letter-spacing:2px;
                       text-transform:uppercase;color:{color};
                       font-family:Helvetica,Arial,sans-serif">
-              Guidelines Edition &middot; {macro_topic}
+              Guidelines Edition &nbsp;&middot;&nbsp; {macro_topic}
             </p>
           </td>
-          <td align="right" style="vertical-align:middle">
-            <p style="margin:0;font-size:12px;color:#aaa;
+          <td class="ed" align="right" style="vertical-align:bottom">
+            <p style="margin:0;font-size:11px;color:#8888aa;
                       font-family:Helvetica,Arial,sans-serif">{date_str}</p>
           </td>
         </tr>
       </table>
     </td></tr>
+    <!-- Gold rule below masthead -->
+    <tr><td style="height:3px;background:{color};font-size:0;line-height:0">&nbsp;</td></tr>
 
-    <!-- Headline + content -->
-    <tr><td style="padding:32px 40px 0">
-      <p style="margin:0 0 6px 0;font-size:10px;font-weight:700;letter-spacing:2px;
-                text-transform:uppercase;color:{color};
-                font-family:Helvetica,Arial,sans-serif">{specific}</p>
-      <p style="margin:0 0 28px 0;font-size:22px;font-weight:700;color:{NAV};line-height:1.3;
-                font-family:Georgia,'Times New Roman',serif">
-        {guideline.get('guideline_headline', '')}
-      </p>
-      {themes_html}
-      {recs_html}
-      {sources_html}
+    <!-- ── Topic intro block ────────────────────────────────────────────── -->
+    <tr><td class="toc" style="padding:20px 48px;background:#fdf8ee;
+                               border-bottom:1px solid #e8e4d8">
+      <p style="margin:0 0 4px;font-size:9px;font-weight:700;letter-spacing:2.5px;
+                text-transform:uppercase;color:#c8a840;
+                font-family:Helvetica,Arial,sans-serif">This Month's Focus</p>
+      <p style="margin:0;font-size:13px;color:#555;font-family:Helvetica,Arial,sans-serif;
+                line-height:1.6">{specific}</p>
     </td></tr>
 
-    <!-- Visual summary (generated figures) -->
+    <!-- ── Headline + content ───────────────────────────────────────────── -->
+    <tr><td class="ep" style="padding:36px 48px 0">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="width:4px;background:{color};border-radius:2px" width="4"></td>
+          <td style="padding:2px 0 0 22px">
+            <p class="hl" style="margin:0 0 22px;font-size:21px;font-weight:700;color:{NAV};
+                      line-height:1.3;font-family:Georgia,'Times New Roman',serif">
+              {guideline.get('guideline_headline', '')}
+            </p>
+            {themes_html}
+            {recs_html}
+            {sources_html}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+
+    <!-- ── Visual summary ───────────────────────────────────────────────── -->
     {visuals_block}
 
-    <!-- breathing room -->
-    <tr><td style="padding:12px 0"></td></tr>
+    <tr><td style="padding:16px 0 0"></td></tr>
 
-    <!-- Bottom line -->
-    <tr><td style="padding:32px 40px;background:{NAV}">
-      <p style="margin:0 0 8px 0;font-size:10px;font-weight:700;letter-spacing:2px;
+    <!-- ── Take-Home ────────────────────────────────────────────────────── -->
+    <tr><td class="ta" style="padding:32px 48px;background:{NAV}">
+      <p style="margin:0 0 10px;font-size:9px;font-weight:700;letter-spacing:2.5px;
                 text-transform:uppercase;color:{color};
                 font-family:Helvetica,Arial,sans-serif">This Month's Guideline Take-Home</p>
-      <p style="margin:0;font-size:17px;color:{WHITE};line-height:1.65;
+      <p class="bt" style="margin:0;font-size:17px;color:{WHITE};line-height:1.7;
                 font-family:Georgia,'Times New Roman',serif;font-style:italic">
         {guideline.get('bottom_line', '')}
       </p>
     </td></tr>
 
-    <!-- Footer -->
-    <tr><td style="padding:20px 40px;border-top:1px solid #ebebeb;background:#fafaf9">
-      <p style="margin:0;font-size:11px;color:#aaa;
-                font-family:Helvetica,Arial,sans-serif;line-height:1.8;text-align:center">
-        <strong style="color:#888">NeuroDigest</strong>
-        {manage_link}
-        {unsub_link}
+    <!-- ── Footer ───────────────────────────────────────────────────────── -->
+    <tr><td class="ft" style="padding:22px 48px;background:#f5f5f3;
+                               border-top:2px solid #e0e0dc">
+      <p style="margin:0;font-size:13px;color:#555;
+                font-family:Helvetica,Arial,sans-serif;line-height:2;text-align:center">
+        <strong style="color:#333;font-family:Georgia,'Times New Roman',serif">
+          NeuroDigest
+        </strong>
+        &nbsp;&middot;&nbsp;
+        {manage_link}{sep}{unsub_link}
       </p>
     </td></tr>
 
@@ -927,6 +1322,14 @@ def send_guidelines_edition(
     macro = guidelines_topic_this_month()
     print(f"  Guidelines macro topic this month: {macro}")
 
+    # If this month's macro topic was already sent (e.g. sent manually mid-month),
+    # pick the next topic in the rotation so subscribers get fresh content.
+    if guideline_sent_this_month(sb):
+        month_index = datetime.now().month - 1
+        next_index  = (month_index + 1) % len(GUIDELINES_ROTATION)
+        macro       = GUIDELINES_ROTATION[next_index]
+        print(f"  Already sent a guideline this month — switching to next topic: {macro}")
+
     # Fetch sub-topics already sent under this macro area to avoid repeats
     already_sent: list[str] = []
     try:
@@ -953,21 +1356,40 @@ def send_guidelines_edition(
     subject  = f"NeuroDigest Guidelines — {specific}"
     html_gl  = build_guidelines_html_email(data, site_url=site_url)
 
-    # Save to Supabase so new subscribers joining this month can also receive it
+    # Save to Supabase so new subscribers joining this month can also receive it.
+    # digest_json is stored so future resend scripts can rebuild per-subscriber HTML
+    # (with personalised tokens) without re-calling Claude.
     try:
         sb.table("digests").insert({
-            "subject": subject,
-            "html":    html_gl,
-            "plain":   f"NeuroDigest Guidelines — {specific}\n\n{data.get('bottom_line', '')}",
+            "subject":     subject,
+            "html":        html_gl,
+            "plain":       f"NeuroDigest Guidelines — {specific}\n\n{data.get('bottom_line', '')}",
+            "digest_json": json.dumps(data),
         }).execute()
     except Exception as e:
         print(f"  Could not save guidelines digest to Supabase: {e}")
 
-    sent = 0
+    # Fetch which subscribers already received this guidelines edition
+    # (use digest_id from the saved row so sends_log works consistently)
+    gl_digest_id: int | None = None
+    try:
+        saved = sb.table("digests").select("id").eq("subject", subject) \
+                  .order("sent_at", desc=True).limit(1).execute()
+        if saved.data:
+            gl_digest_id = saved.data[0]["id"]
+    except Exception:
+        pass
+    already_sent_gl = get_already_sent(sb, gl_digest_id) if gl_digest_id else set()
+
+    sent       = 0
+    sent_addrs: list[str] = []
     for sub in subscribers:
         email = sub["email"]
+        if email in already_sent_gl:
+            continue
         token = generate_preferences_token(email)
         html  = build_guidelines_html_email(data, token=token, site_url=site_url)
+        html  = ensure_unsubscribe(html, token, site_url)
         try:
             resend.Emails.send({
                 "from":    from_addr,
@@ -976,9 +1398,13 @@ def send_guidelines_edition(
                 "html":    html,
             })
             sent += 1
+            sent_addrs.append(email)
             time.sleep(0.15)
         except Exception as e:
             print(f"  Resend error ({email}): {e}")
+
+    if gl_digest_id and sent_addrs:
+        log_sends(sb, sent_addrs, gl_digest_id)
 
     print(f"  Guidelines Edition sent: {sent}/{len(subscribers)}")
 
@@ -996,88 +1422,132 @@ def send_guidelines_edition(
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def run():
+    """
+    Hourly entry point (cron: '0,30 * * * 1,2').
+
+    Flow per invocation
+    ──────────────────────────────────────────────────────────────────────────
+    1. Connect to Supabase.
+    2. Check whether today's digest was already generated.
+       • NO  → generate (RSS + Claude synthesis), save, record edition_num.
+       • YES → reuse the saved HTML/plain/edition_num.  Expensive work runs
+               only ONCE per Monday regardless of how many hourly crons fire.
+    3. Fetch all confirmed subscribers (with their timezone).
+    4. Filter to those currently at Monday 14:xx in their local timezone.
+    5. Skip anyone already in sends_log for this digest_id (dedup).
+    6. Send to the eligible batch; log successful sends.
+    7. Monthly Guidelines Edition runs only on the last Monday of each month,
+       only during the first hourly run (when the digest is freshly generated).
+    """
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise SystemExit("Set ANTHROPIC_API_KEY in .env")
 
-    client  = anthropic.Anthropic(api_key=api_key)
-    edition = get_edition()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    from supabase import create_client
+    sb = create_client(
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("SUPABASE_SERVICE_KEY", ""),
+    )
 
-    print("Fetching RSS feeds...")
-    all_articles = fetch_all_articles()
-    articles = select_articles(all_articles)
-    print(f"Total: {len(articles)} articles selected for synthesis\n")
+    # ── Step 1: get or generate today's digest ────────────────────────────────
+    existing = get_todays_digest(sb)
 
-    print("Synthesizing full neurology digest with Claude...")
-    digest = synthesize_all(articles, client)
-    sections = digest.get("sections", [])
-    print(f"  {len(sections)} clinical areas identified")
-    for s in sections:
-        print(f"  · {s['topic']} ({len(s.get('themes', []))} themes)")
-    print(f"  Bottom line: {digest.get('bottom_line','')[:80]}...")
-
-    html  = build_html_email(digest, edition)
-    plain = build_plain_text(digest, edition)
-
-    (OUTPUT_DIR / "neuro_digest.html").write_text(html)
-    (OUTPUT_DIR / "neuro_digest.txt").write_text(plain)
-    print(f"\nDigest saved → {OUTPUT_DIR.resolve()}")
-
-    # Save latest digest to Supabase so new subscribers receive it on sign-up
-    try:
-        from supabase import create_client
-        sb = create_client(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_KEY", ""))
-        date_str = datetime.now().strftime("%B %d, %Y")
-        sb.table("digests").insert({
-            "subject": f"NeuroDigest — {date_str}",
-            "html":    html,
-            "plain":   plain,
-        }).execute()
-        print("  Latest digest saved to Supabase")
-    except Exception as e:
-        print(f"  Could not save digest to Supabase: {e}")
-
-    print("Fetching confirmed subscribers from Supabase...")
-    subscribers = fetch_supabase_subscribers()
-
-    if subscribers:
-        print(f"  {len(subscribers)} subscriber(s) found — sending personalized emails...")
-        send_personalized_via_resend(subscribers, digest, edition)
+    if existing:
+        digest_id   = existing["id"]
+        edition     = existing.get("edition_num") or 0
+        html        = existing["html"]
+        plain       = existing["plain"]
+        fresh       = False
+        # Restore structured JSON so per-subscriber topic filtering still works
+        try:
+            digest_data = json.loads(existing.get("digest_json") or "{}")
+        except Exception:
+            digest_data = {}
+        print(f"  Digest already generated today "
+              f"(edition #{edition}, id={digest_id}) — skipping synthesis.")
     else:
+        fresh   = True
+        client  = anthropic.Anthropic(api_key=api_key)
+        edition = get_edition()
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+        print("Fetching RSS feeds...")
+        all_articles = fetch_all_articles()
+        articles     = select_articles(all_articles)
+        print(f"Total: {len(articles)} articles selected for synthesis\n")
+
+        print("Synthesizing full neurology digest with Claude...")
+        digest_data = synthesize_all(articles, client)
+        sections    = digest_data.get("sections", [])
+        print(f"  {len(sections)} clinical areas identified")
+        for s in sections:
+            print(f"  · {s['topic']} ({len(s.get('themes', []))} themes)")
+        print(f"  Bottom line: {digest_data.get('bottom_line','')[:80]}...")
+
+        html  = build_html_email(digest_data, edition)
+        plain = build_plain_text(digest_data, edition)
+
+        (OUTPUT_DIR / "neuro_digest.html").write_text(html)
+        (OUTPUT_DIR / "neuro_digest.txt").write_text(plain)
+        print(f"\nDigest saved → {OUTPUT_DIR.resolve()}")
+
+        date_str  = datetime.now().strftime("%B %d, %Y")
+        subject   = f"NeuroDigest — {date_str}"
+        digest_id = save_digest_to_supabase(sb, subject, html, plain, edition, digest_data)
+        if digest_id:
+            print(f"  Digest persisted to Supabase (id={digest_id})")
+        else:
+            print("  Warning: could not persist digest to Supabase")
+            digest_id = None
+
+    # ── Step 2: fetch all confirmed subscribers ───────────────────────────────
+    print("Fetching confirmed subscribers from Supabase...")
+    all_subscribers = fetch_supabase_subscribers()
+    print(f"  {len(all_subscribers)} confirmed subscriber(s) total")
+
+    if not all_subscribers:
         print("  No Supabase subscribers yet — falling back to Mailchimp broadcast...")
         send_email(html, plain, edition)
+        return
 
-    # ── Monthly Guidelines Edition (last Monday of each month) ────────────────
-    if is_last_monday_of_month():
+    # ── Step 3: timezone filter — only send to Monday 14:xx subscribers ───────
+    eligible = filter_by_local_time(all_subscribers, target_hour=14, target_weekday=0)
+    now_utc  = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    print(f"  {len(eligible)} subscriber(s) at Monday 14:xx local time "
+          f"(current UTC: {now_utc})")
+
+    if not eligible:
+        print("  No subscribers in the 14:xx window this run — nothing to send.")
+        return
+
+    # ── Step 4: deduplication ─────────────────────────────────────────────────
+    already_sent: set[str] = set()
+    if digest_id:
+        already_sent = get_already_sent(sb, digest_id)
+        if already_sent:
+            print(f"  {len(already_sent)} subscriber(s) already sent this digest — "
+                  "skipping them.")
+
+    # ── Step 5: send ──────────────────────────────────────────────────────────
+    # digest_data is always available: either freshly generated or restored from
+    # Supabase digest_json. Per-subscriber topic filtering works on every run.
+    send_personalized_via_resend(
+        eligible, digest_data, edition,
+        sb=sb, digest_id=digest_id, already_sent=already_sent,
+    )
+
+    # ── Monthly Guidelines Edition (last Monday of month, first run only) ─────
+    if fresh and is_last_monday_of_month():
         print("\nLast Monday of month — sending Monthly Guidelines Edition...")
         try:
-            from supabase import create_client as _sc
-            _sb = _sc(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_KEY", ""))
+            client = anthropic.Anthropic(api_key=api_key)
             gl_subs = fetch_supabase_subscribers()
             if gl_subs:
-                send_guidelines_edition(gl_subs, client, _sb)
+                send_guidelines_edition(gl_subs, client, sb)
             else:
                 print("  No subscribers for Guidelines Edition")
         except Exception as e:
             print(f"  Guidelines Edition error: {e}")
-    # ── Subscriber milestone alert ────────────────────────────────────────────
-    try:
-        from supabase import create_client as _sc2
-        _sb2 = _sc2(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_KEY", ""))
-        count = _sb2.table("subscribers").select("id", count="exact").eq("status", "confirmed").execute().count
-        if count and count >= 300:
-            import resend as _r
-            _r.api_key = os.getenv("RESEND_API_KEY", "")
-            _r.Emails.send({
-                "from":    os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>"),
-                "to":      "vincenzolate95l@gmail.com",
-                "subject": f"NeuroDigest — {count} subscribers!",
-                "html":    f"<p>NeuroDigest ha raggiunto <strong>{count} iscritti</strong>. Considera di passare al piano Resend a pagamento (50.000 email/mese).</p>",
-            })
-            print(f"  Subscriber alert sent ({count} subscribers)")
-    except Exception:
-        pass
 
     print(f"\nDone — Edition #{edition}")
 
