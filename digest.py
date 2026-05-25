@@ -647,16 +647,19 @@ def fetch_supabase_subscribers() -> list[dict]:
 
 def filter_by_local_time(
     subscribers: list[dict],
-    target_hour: int = 14,
+    target_hour_start: int = 8,
+    target_hour_end: int = 20,
     target_weekday: int = 0,   # 0 = Monday
 ) -> list[dict]:
     """
-    Return subscribers for whom it is currently target_hour:xx on target_weekday
-    in their local timezone.
+    Return subscribers for whom it is currently between target_hour_start and
+    target_hour_end (inclusive) on target_weekday in their local timezone.
 
-    The cron fires at :00 and :30 past each hour, so checking the hour (not the
-    minute) gives a clean 30-minute window. The sends_log dedup prevents any
-    subscriber receiving the digest more than once regardless.
+    GitHub Actions scheduled crons are unreliable in timing — they can fire
+    hours late. We use a wide daytime window (8–20 local) so the email is
+    delivered on the correct day regardless of when GitHub runs the job.
+    sends_log deduplication guarantees each subscriber gets exactly one email
+    per digest, no matter how many cron runs hit the window.
 
     Timezone fallback order:
       1. sub["timezone"]  (stored at signup via browser Intl API)
@@ -672,7 +675,8 @@ def filter_by_local_time(
         except (ZoneInfoNotFoundError, Exception):
             # Invalid or unknown timezone string — fall back to Europe/Rome
             local_now = now.astimezone(ZoneInfo("Europe/Rome"))
-        if local_now.weekday() == target_weekday and local_now.hour == target_hour:
+        if (local_now.weekday() == target_weekday
+                and target_hour_start <= local_now.hour <= target_hour_end):
             eligible.append(sub)
     return eligible
 
@@ -958,24 +962,24 @@ def send_email(html_body: str, plain_body: str, edition: int) -> None:
 # Fixed monthly rotation — January = index 0, February = index 1, …
 # 12 topics, one per month, cycling each year.
 GUIDELINES_ROTATION = [
-    "Stroke",
-    "Multiple Sclerosis",
-    "Parkinson's Disease",
-    "Epilepsy",
-    "Dementia and Alzheimer's Disease",
-    "Headache and Migraine",
-    "Neuromuscular Disease",
-    "Neuro-oncology",
-    "Neuroinflammation and Neuroimmunology",
-    "Movement Disorders",
-    "Neurocritical Care",
-    "Neurogenetics",
+    "Stroke",                                    # January
+    "Multiple Sclerosis",                         # February
+    "Parkinson's Disease",                        # March
+    "Epilepsy",                                   # April
+    "Headache and Migraine",                      # May
+    "Neuroinfectious Disease",                    # June  (dementia rimossa temporaneamente)
+    "Neuromuscular Disease",                      # July
+    "Neuro-oncology",                             # August
+    "Neuroinflammation and Neuroimmunology",      # September
+    "Movement Disorders",                         # October
+    "Neurocritical Care",                         # November
+    "Neurogenetics",                              # December
 ]
 
 
 def is_last_monday_of_month() -> bool:
-    """True if today is the last Monday of the current calendar month."""
-    today = datetime.now()
+    """True if today (UTC) is the last Monday of the current calendar month."""
+    today = datetime.now(timezone.utc)
     if today.weekday() != 0:   # 0 = Monday
         return False
     return (today + timedelta(days=7)).month != today.month
@@ -1331,29 +1335,76 @@ def send_guidelines_edition(
     macro = guidelines_topic_this_month()
     print(f"  Guidelines macro topic this month: {macro}")
 
-    # If this month's macro topic was already sent (e.g. sent manually mid-month),
-    # pick the next topic in the rotation so subscribers get fresh content.
+    # If this month's guidelines were already synthesized (e.g. the :00 cron
+    # run already sent to European subscribers and now the :30 run is catching
+    # UTC−1 / UTC−2 subscribers), reuse the existing digest instead of calling
+    # Claude again.  sends_log dedup ensures no subscriber gets it twice.
     if guideline_sent_this_month(sb):
-        month_index = datetime.now().month - 1
-        next_index  = (month_index + 1) % len(GUIDELINES_ROTATION)
-        macro       = GUIDELINES_ROTATION[next_index]
-        print(f"  Already sent a guideline this month — switching to next topic: {macro}")
+        print(f"  Guidelines already synthesized this month — "
+              "resending to any unsent eligible subscribers.")
+        try:
+            now   = datetime.now(timezone.utc)
+            start = now.replace(day=1, hour=0, minute=0,
+                                second=0, microsecond=0).isoformat()
+            rows  = (
+                sb.table("digests")
+                  .select("id,digest_json,subject")
+                  .gte("sent_at", start)
+                  .like("subject", "NeuroDigest Guidelines%")
+                  .order("sent_at", desc=True)
+                  .limit(1)
+                  .execute()
+            )
+            if not rows.data:
+                print("  No existing guidelines digest found — skipping.")
+                return
+            existing_gl   = rows.data[0]
+            gl_digest_id  = existing_gl["id"]
+            data          = json.loads(existing_gl.get("digest_json") or "{}")
+            already_gl    = get_already_sent(sb, gl_digest_id)
+            sent, addrs   = 0, []
+            for sub in subscribers:
+                if sub["email"] in already_gl:
+                    continue
+                token = generate_preferences_token(sub["email"])
+                h     = build_guidelines_html_email(data, token=token,
+                                                    site_url=site_url)
+                h     = ensure_unsubscribe(h, token, site_url)
+                try:
+                    resend.Emails.send({
+                        "from":    from_addr,
+                        "to":      sub["email"],
+                        "subject": existing_gl["subject"],
+                        "html":    h,
+                    })
+                    sent += 1
+                    addrs.append(sub["email"])
+                    time.sleep(0.15)
+                except Exception as e:
+                    print(f"  Resend error ({sub['email']}): {e}")
+            if addrs:
+                log_sends(sb, addrs, gl_digest_id)
+            print(f"  Guidelines resent: {sent} new subscriber(s)")
+        except Exception as e:
+            print(f"  Could not resend existing guidelines: {e}")
+        return
 
+    # Fresh synthesis for this month
     # Fetch sub-topics already sent under this macro area to avoid repeats
-    already_sent: list[str] = []
+    already_sent_topics: list[str] = []
     try:
         log = sb.table("guidelines_log") \
                 .select("specific_topic") \
                 .eq("macro_topic", macro) \
                 .execute()
-        already_sent = [r["specific_topic"] for r in (log.data or [])]
-        if already_sent:
-            print(f"  Already sent for {macro}: {', '.join(already_sent)}")
+        already_sent_topics = [r["specific_topic"] for r in (log.data or [])]
+        if already_sent_topics:
+            print(f"  Already sent for {macro}: {', '.join(already_sent_topics)}")
     except Exception as e:
         print(f"  Could not fetch guidelines log: {e}")
 
     print(f"  Synthesizing guidelines with Claude...")
-    data = synthesize_guideline(macro, client, already_sent=already_sent)
+    data = synthesize_guideline(macro, client, already_sent=already_sent_topics)
     if not data:
         print("  Synthesis failed — skipping Guidelines Edition")
         return
@@ -1432,21 +1483,20 @@ def send_guidelines_edition(
 # ── Main ──────────────────────────────────────────────────────────────────────
 def run():
     """
-    Hourly entry point (cron: '0,30 * * * 1,2').
+    Cron entry point (fires every 30 min on Mon+Tue UTC: '0,30 * * * 1,2').
 
     Flow per invocation
     ──────────────────────────────────────────────────────────────────────────
-    1. Connect to Supabase.
-    2. Check whether today's digest was already generated.
-       • NO  → generate (RSS + Claude synthesis), save, record edition_num.
-       • YES → reuse the saved HTML/plain/edition_num.  Expensive work runs
-               only ONCE per Monday regardless of how many hourly crons fire.
-    3. Fetch all confirmed subscribers (with their timezone).
-    4. Filter to those currently at Monday 14:xx in their local timezone.
-    5. Skip anyone already in sends_log for this digest_id (dedup).
-    6. Send to the eligible batch; log successful sends.
-    7. Monthly Guidelines Edition runs only on the last Monday of each month,
-       only during the first hourly run (when the digest is freshly generated).
+    LAST MONDAY OF MONTH
+      → Guidelines Edition ONLY (no weekly digest).
+      → Sent exclusively to subscribers whose local clock shows Monday 14:xx.
+      → sends_log dedup prevents any subscriber getting it twice.
+
+    ALL OTHER MONDAYS
+      → Weekly Digest.
+      → Digest generated once per day (first run), cached in Supabase.
+      → Sent only to subscribers whose local clock shows Monday 14:xx.
+      → sends_log dedup prevents duplicates across the two :00/:30 cron runs.
     """
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -1458,7 +1508,35 @@ def run():
         os.getenv("SUPABASE_SERVICE_KEY", ""),
     )
 
-    # ── Step 1: get or generate today's digest ────────────────────────────────
+    # ── Timezone-filtered subscriber list (same for both paths) ──────────────
+    print("Fetching confirmed subscribers from Supabase...")
+    all_subscribers = fetch_supabase_subscribers()
+    print(f"  {len(all_subscribers)} confirmed subscriber(s) total")
+
+    if not all_subscribers:
+        print("  No subscribers — nothing to send.")
+        return
+
+    now_utc  = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    eligible = filter_by_local_time(all_subscribers, target_hour_start=8, target_hour_end=20, target_weekday=0)
+    print(f"  {len(eligible)} subscriber(s) at Monday 14:xx local time (UTC: {now_utc})")
+    if not eligible:
+        print("  No subscribers in the 14:xx window this run — nothing to send.")
+        return
+
+    # ── LAST MONDAY → Guidelines Edition only, no weekly digest ──────────────
+    if is_last_monday_of_month():
+        print("\nLast Monday of month — Guidelines Edition only (no weekly digest).")
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            send_guidelines_edition(eligible, client, sb)
+        except Exception as e:
+            print(f"  Guidelines Edition error: {e}")
+        return
+
+    # ── ALL OTHER MONDAYS → Weekly Digest ────────────────────────────────────
+
+    # Step 1: generate digest once per day; reuse on subsequent runs
     existing = get_todays_digest(sb)
 
     if existing:
@@ -1466,8 +1544,6 @@ def run():
         edition     = existing.get("edition_num") or 0
         html        = existing["html"]
         plain       = existing["plain"]
-        fresh       = False
-        # Restore structured JSON so per-subscriber topic filtering still works
         try:
             digest_data = json.loads(existing.get("digest_json") or "{}")
         except Exception:
@@ -1475,7 +1551,6 @@ def run():
         print(f"  Digest already generated today "
               f"(edition #{edition}, id={digest_id}) — skipping synthesis.")
     else:
-        fresh   = True
         client  = anthropic.Anthropic(api_key=api_key)
         edition = get_edition()
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -1509,17 +1584,7 @@ def run():
             print("  Warning: could not persist digest to Supabase")
             digest_id = None
 
-    # ── Step 2: fetch all confirmed subscribers ───────────────────────────────
-    print("Fetching confirmed subscribers from Supabase...")
-    all_subscribers = fetch_supabase_subscribers()
-    print(f"  {len(all_subscribers)} confirmed subscriber(s) total")
-
-    if not all_subscribers:
-        print("  No Supabase subscribers yet — falling back to Mailchimp broadcast...")
-        send_email(html, plain, edition)
-        return
-
-    # ── Step 3: deduplication ─────────────────────────────────────────────────
+    # Step 2: deduplication
     already_sent: set[str] = set()
     if digest_id:
         already_sent = get_already_sent(sb, digest_id)
@@ -1527,44 +1592,11 @@ def run():
             print(f"  {len(already_sent)} subscriber(s) already sent this digest — "
                   "skipping them.")
 
-    # ── Step 4: decide who to send to ────────────────────────────────────────
-    # If the digest was just generated (fresh=True), send to ALL subscribers
-    # immediately — they all receive it at the same time (~14:30 Rome).
-    # On subsequent runs (digest already existed), use the timezone window to
-    # catch only new subscribers or those in different UTC offsets.
-    now_utc = datetime.now(timezone.utc).strftime("%H:%M UTC")
-    if fresh:
-        eligible = all_subscribers
-        print(f"  Fresh digest — sending to all {len(eligible)} subscriber(s) now "
-              f"(UTC: {now_utc})")
-    else:
-        eligible = filter_by_local_time(all_subscribers, target_hour=14, target_weekday=0)
-        print(f"  {len(eligible)} subscriber(s) at Monday 14:xx local time "
-              f"(current UTC: {now_utc})")
-        if not eligible:
-            print("  No subscribers in the 14:xx window this run — nothing to send.")
-            return
-
-    # ── Step 5: send ──────────────────────────────────────────────────────────
-    # digest_data is always available: either freshly generated or restored from
-    # Supabase digest_json. Per-subscriber topic filtering works on every run.
+    # Step 3: send to eligible batch
     send_personalized_via_resend(
         eligible, digest_data, edition,
         sb=sb, digest_id=digest_id, already_sent=already_sent,
     )
-
-    # ── Monthly Guidelines Edition (last Monday of month, first run only) ─────
-    if fresh and is_last_monday_of_month():
-        print("\nLast Monday of month — sending Monthly Guidelines Edition...")
-        try:
-            client = anthropic.Anthropic(api_key=api_key)
-            gl_subs = fetch_supabase_subscribers()
-            if gl_subs:
-                send_guidelines_edition(gl_subs, client, sb)
-            else:
-                print("  No subscribers for Guidelines Edition")
-        except Exception as e:
-            print(f"  Guidelines Edition error: {e}")
 
     print(f"\nDone — Edition #{edition}")
 
