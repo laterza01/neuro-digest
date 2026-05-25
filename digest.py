@@ -1518,7 +1518,7 @@ def run():
         return
 
     now_utc  = datetime.now(timezone.utc).strftime("%H:%M UTC")
-    eligible = filter_by_local_time(all_subscribers, target_hour_start=8, target_hour_end=20, target_weekday=0)
+    eligible = filter_by_local_time(all_subscribers, target_hour_start=0, target_hour_end=23, target_weekday=0)
     print(f"  {len(eligible)} subscriber(s) at Monday 14:xx local time (UTC: {now_utc})")
     if not eligible:
         print("  No subscribers in the 14:xx window this run — nothing to send.")
