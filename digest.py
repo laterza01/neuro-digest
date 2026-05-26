@@ -257,15 +257,43 @@ GUIDELINES_ACC = "#8b6914"
 #   toc → table-of-contents cell
 MOBILE_CSS = """
 <style>
+/* ── base reset for email clients ── */
+img{max-width:100%!important;height:auto!important}
+table{border-collapse:collapse}
+
 @media only screen and (max-width:620px){
-  .ep{padding-left:20px!important;padding-right:20px!important}
-  .eh{padding:18px 20px!important}
+  /* outer wrapper */
+  table[width="100%"]{width:100%!important}
+
+  /* padding resets */
+  .ep{padding-left:16px!important;padding-right:16px!important;padding-top:24px!important}
+  .eh{padding:16px 16px!important}
   .ed{display:none!important}
+  .ta{padding:24px 16px!important}
+  .ft{padding:16px 16px!important}
+  .toc{padding:14px 16px!important}
+
+  /* typography */
   .hl{font-size:18px!important;line-height:1.35!important}
   .bt{font-size:16px!important;line-height:1.8!important}
-  .ta{padding:24px 20px!important}
-  .ft{padding:16px 20px!important}
-  .toc{padding:16px 20px!important}
+
+  /* prevent text overflow on narrow screens */
+  td,p,div,span{
+    word-break:break-word!important;
+    overflow-wrap:break-word!important;
+    -webkit-hyphens:auto!important;
+    hyphens:auto!important;
+    max-width:100%!important;
+  }
+
+  /* inner content table (color bar + text) */
+  .ep table{width:100%!important}
+  .ep table td:last-child{padding-left:14px!important}
+
+  /* section headings inside guidelines */
+  .sec-h{font-size:11px!important;letter-spacing:1.5px!important}
+  .sec-b{font-size:14px!important;line-height:1.65!important}
+  .rec-b{font-size:13px!important;line-height:1.65!important}
 }
 </style>"""
 
@@ -1132,7 +1160,7 @@ def build_guidelines_html_email(
             </table>"""
         themes_html += f"""
         <div style="margin-bottom:28px">
-          <p style="margin:0 0 10px 0;font-size:11px;font-weight:700;letter-spacing:2px;
+          <p class="sec-h" style="margin:0 0 10px 0;font-size:11px;font-weight:700;letter-spacing:2px;
                     color:{color};text-transform:uppercase;
                     font-family:Helvetica,Arial,sans-serif">{th['title']}</p>
           {body_paras}
@@ -1144,8 +1172,8 @@ def build_guidelines_html_email(
     recs_html = ""
     if recs:
         rec_items = "".join(
-            f'<li style="margin:0 0 10px 0;font-size:15px;color:#333;line-height:1.7;'
-            f'font-family:Helvetica,Arial,sans-serif">{r}</li>'
+            f'<li class="rec-b" style="margin:0 0 10px 0;font-size:15px;color:#333;line-height:1.7;'
+            f'font-family:Helvetica,Arial,sans-serif;word-break:break-word">{r}</li>'
             for r in recs
         )
         recs_html = f"""
@@ -1170,11 +1198,11 @@ def build_guidelines_html_email(
             label = (
                 f'<a href="{href}" style="font-size:10px;font-weight:700;letter-spacing:1px;'
                 f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif;'
-                f'white-space:nowrap;text-decoration:none">{issuer}</a>'
+                f'text-decoration:none;word-break:break-word">{issuer}</a>'
                 if href else
                 f'<span style="font-size:10px;font-weight:700;letter-spacing:1px;'
                 f'text-transform:uppercase;color:#aaa;font-family:Helvetica,Arial,sans-serif;'
-                f'white-space:nowrap">{issuer}</span>'
+                f'word-break:break-word">{issuer}</span>'
             )
             items += (
                 f'<tr>'
