@@ -101,7 +101,7 @@ class handler(BaseHTTPRequestHandler):
             resend.Emails.send({
                 "from":    FROM_ADDR,
                 "to":      [email],
-                "subject": "Welcome to NeuroDigest Plus ✦",
+                "subject": "Benvenuto in NeuroDigest Plus ✦",
                 "html": f"""
 <!DOCTYPE html><html><head><meta charset="utf-8"></head><body
   style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
@@ -127,7 +127,7 @@ class handler(BaseHTTPRequestHandler):
     </p>
     <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
     <p style="font-size:14px;color:#888;line-height:1.7;margin:0">
-      Riceverai subito una seconda email con il link di accesso alla piattaforma.<br>
+      Riceverai subito una seconda email con il link di accesso a <strong>NeuroAtlas</strong>.<br>
       La prossima digest arriva <strong>lunedì alle 14:00</strong>.
     </p>
   </div>
@@ -141,11 +141,11 @@ class handler(BaseHTTPRequestHandler):
 """,
             })
 
-            # ── Email 2: Platform access link ──────────────────────────────────
+            # ── Email 2: NeuroAtlas access link ───────────────────────────────
             resend.Emails.send({
                 "from":    FROM_ADDR,
                 "to":      [email],
-                "subject": "Il tuo accesso alla piattaforma NeuroDigest Plus",
+                "subject": "Il tuo accesso a NeuroAtlas è pronto",
                 "html": f"""
 <!DOCTYPE html><html><head><meta charset="utf-8"></head><body
   style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
@@ -155,25 +155,25 @@ class handler(BaseHTTPRequestHandler):
     <div style="display:inline-block;background:#1a1a2e;color:#c8a840;
                 font-size:11px;font-weight:700;letter-spacing:2px;
                 text-transform:uppercase;padding:6px 16px;border-radius:2px">
-      NeuroDigest Plus ✦
+      NeuroAtlas ✦
     </div>
   </div>
 
   <div style="background:#fff;border:1px solid #ddd;border-top:3px solid #c8a840;padding:40px 36px">
     <h1 style="font-family:Georgia,serif;font-size:26px;color:#1a1a2e;
                margin:0 0 16px;line-height:1.2">
-      La tua piattaforma è pronta.
+      NeuroAtlas è pronto.
     </h1>
     <p style="font-size:16px;color:#555;line-height:1.7;margin:0 0 28px">
-      Accedi alla libreria completa di segni neurologici, triadi cliniche
-      e materiale di riferimento clinico — direttamente dal link qui sotto.
+      La libreria completa di segni neurologici — schede di riferimento clinico
+      per il letto del paziente, il giro visite, l'ambulatorio.
     </p>
 
     <div style="text-align:center;margin:0 0 28px">
       <a href="{PLATFORM_URL}" style="display:inline-block;background:#1a1a2e;
          color:#fff;text-decoration:none;padding:16px 36px;
          font-size:15px;font-weight:700;letter-spacing:.3px;border-radius:3px">
-        Accedi alla piattaforma →
+        Apri NeuroAtlas →
       </a>
     </div>
 
@@ -181,10 +181,10 @@ class handler(BaseHTTPRequestHandler):
                 padding:20px 24px;margin-bottom:24px">
       <p style="font-size:11px;font-weight:700;letter-spacing:1.4px;
                 text-transform:uppercase;color:#aaa;margin:0 0 12px">
-        Cosa trovi sulla piattaforma
+        Cosa trovi su NeuroAtlas
       </p>
       <p style="font-size:14px;color:#555;line-height:1.8;margin:0">
-        📋 &nbsp;<strong>30 Segni Neurologici</strong> — schede complete con tecnica,
+        📋 &nbsp;<strong>30 Segni Neurologici</strong> — tecnica passo-passo,
         pathway anatomico, sensibilità &amp; specificità, varianti, video<br>
         🔺 &nbsp;<strong>Triadi Cliniche</strong> — in arrivo<br>
         📊 &nbsp;<strong>Grafici &amp; Diagrammi</strong> — in arrivo<br>
@@ -194,7 +194,7 @@ class handler(BaseHTTPRequestHandler):
 
     <hr style="border:none;border-top:1px solid #eee;margin:0 0 20px">
     <p style="font-size:13px;color:#999;line-height:1.7;margin:0">
-      Salva questo link — è il tuo accesso diretto alla piattaforma.<br>
+      Salva questo link — è il tuo accesso diretto a NeuroAtlas.<br>
       Domande? Rispondi a questa email.
     </p>
   </div>
