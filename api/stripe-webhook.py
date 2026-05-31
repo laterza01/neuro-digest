@@ -13,7 +13,7 @@ SUPABASE_URL           = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY           = os.environ.get("SUPABASE_SERVICE_KEY", "")
 RESEND_API_KEY         = os.environ.get("RESEND_API_KEY", "")
 FROM_ADDR              = "NeuroDigest Plus <digest@neuro-digest.com>"
-PLATFORM_URL           = "https://neurodigest-lab.netlify.app"
+PLATFORM_URL           = "https://atlas.neuro-digest.com/signs/"
 
 
 class handler(BaseHTTPRequestHandler):
