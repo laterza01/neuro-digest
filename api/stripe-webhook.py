@@ -38,16 +38,21 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             # ── Handle events ─────────────────────────────────────────────────
-            event_type = event.get("type") or getattr(event, "type", "")
+            # stripe-python 8.x returns objects, not dicts — use getattr only
+            event_type = getattr(event, "type", "")
 
             if event_type == "checkout.session.completed":
-                # Retrieve full session (handles both thin and classic events)
-                obj = (event.get("data") or {}).get("object") or {}
-                session_id = (obj.get("id") if isinstance(obj, dict) else getattr(obj, "id", None))
+                # Try to get session_id from event.data.object or event.related_object
+                session_id = None
+                try:
+                    session_id = event.data.object.id
+                except Exception:
+                    pass
                 if not session_id:
-                    # v2 thin event — get id from related_object
-                    related = event.get("related_object") or getattr(event, "related_object", None)
-                    session_id = (related.get("id") if isinstance(related, dict) else getattr(related, "id", None))
+                    try:
+                        session_id = event.related_object.id
+                    except Exception:
+                        pass
                 if session_id:
                     session = stripe.checkout.Session.retrieve(session_id)
                     self._handle_checkout_completed(session)
@@ -58,13 +63,18 @@ class handler(BaseHTTPRequestHandler):
                 "customer.subscription.deleted",
                 "customer.subscription.updated",
             ):
-                obj = (event.get("data") or {}).get("object") or {}
-                if not obj:
-                    related = event.get("related_object") or getattr(event, "related_object", None)
-                    sub_id = (related.get("id") if isinstance(related, dict) else getattr(related, "id", None))
-                    if sub_id:
-                        obj = stripe.Subscription.retrieve(sub_id)
-                self._handle_subscription_change(obj)
+                sub = None
+                try:
+                    sub = event.data.object
+                except Exception:
+                    pass
+                if not sub:
+                    try:
+                        sub = stripe.Subscription.retrieve(event.related_object.id)
+                    except Exception:
+                        pass
+                if sub:
+                    self._handle_subscription_change(sub)
 
             self._respond(200, "ok")
 
