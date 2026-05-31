@@ -38,14 +38,33 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             # ── Handle events ─────────────────────────────────────────────────
-            if event["type"] == "checkout.session.completed":
-                self._handle_checkout_completed(event["data"]["object"])
+            event_type = event.get("type") or getattr(event, "type", "")
 
-            elif event["type"] in (
+            if event_type == "checkout.session.completed":
+                # Retrieve full session (handles both thin and classic events)
+                obj = (event.get("data") or {}).get("object") or {}
+                session_id = (obj.get("id") if isinstance(obj, dict) else getattr(obj, "id", None))
+                if not session_id:
+                    # v2 thin event — get id from related_object
+                    related = event.get("related_object") or getattr(event, "related_object", None)
+                    session_id = (related.get("id") if isinstance(related, dict) else getattr(related, "id", None))
+                if session_id:
+                    session = stripe.checkout.Session.retrieve(session_id)
+                    self._handle_checkout_completed(session)
+                else:
+                    print("[stripe-webhook] checkout.session.completed — no session_id found")
+
+            elif event_type in (
                 "customer.subscription.deleted",
                 "customer.subscription.updated",
             ):
-                self._handle_subscription_change(event["data"]["object"])
+                obj = (event.get("data") or {}).get("object") or {}
+                if not obj:
+                    related = event.get("related_object") or getattr(event, "related_object", None)
+                    sub_id = (related.get("id") if isinstance(related, dict) else getattr(related, "id", None))
+                    if sub_id:
+                        obj = stripe.Subscription.retrieve(sub_id)
+                self._handle_subscription_change(obj)
 
             self._respond(200, "ok")
 
@@ -57,10 +76,16 @@ class handler(BaseHTTPRequestHandler):
 
     def _handle_checkout_completed(self, session):
         """Mark subscriber as premium when payment succeeds."""
-        email    = (session.get("customer_email") or
-                    (session.get("customer_details") or {}).get("email", ""))
-        cust_id  = session.get("customer", "")
-        sub_id   = session.get("subscription", "")
+        def _get(obj, key, default=""):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default) or default
+
+        customer_details = _get(session, "customer_details")
+        cd_email = (_get(customer_details, "email") if customer_details else "")
+        email    = _get(session, "customer_email") or cd_email
+        cust_id  = _get(session, "customer", "")
+        sub_id   = _get(session, "subscription", "")
 
         if not email:
             print("[stripe-webhook] checkout.session.completed — no email found")
@@ -215,9 +240,14 @@ class handler(BaseHTTPRequestHandler):
 
     def _handle_subscription_change(self, subscription):
         """Revoke premium if subscription cancelled or payment failed."""
-        status  = subscription.get("status", "")
-        cust_id = subscription.get("customer", "")
-        sub_id  = subscription.get("id", "")
+        def _get(obj, key, default=""):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default) or default
+
+        status  = _get(subscription, "status", "")
+        cust_id = _get(subscription, "customer", "")
+        sub_id  = _get(subscription, "id", "")
 
         if not cust_id:
             return
