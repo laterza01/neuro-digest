@@ -101,7 +101,7 @@ class handler(BaseHTTPRequestHandler):
             resend.Emails.send({
                 "from":    FROM_ADDR,
                 "to":      [email],
-                "subject": "Benvenuto in NeuroDigest Plus ✦",
+                "subject": "Welcome to NeuroDigest Plus ✦",
                 "html": f"""
 <!DOCTYPE html><html><head><meta charset="utf-8"></head><body
   style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
@@ -118,23 +118,23 @@ class handler(BaseHTTPRequestHandler):
   <div style="background:#fff;border:1px solid #ddd;border-top:3px solid #c8a840;padding:40px 36px">
     <h1 style="font-family:Georgia,serif;font-size:28px;color:#1a1a2e;
                margin:0 0 16px;line-height:1.2">
-      Benvenuto in NeuroDigest Plus.
+      Welcome to NeuroDigest Plus.
     </h1>
     <p style="font-size:16px;color:#555;line-height:1.7;margin:0 0 24px">
-      Il tuo accesso è ora attivo. Da questo momento hai accesso completo a tutto
-      ciò che NeuroDigest Plus include — segni neurologici, triadi cliniche,
-      dati di sensibilità e specificità, dimostrazioni video.
+      Your access is now active. From this moment you have full access to everything
+      NeuroDigest Plus includes — neurological signs, clinical triads,
+      sensitivity &amp; specificity data, video demonstrations.
     </p>
     <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
     <p style="font-size:14px;color:#888;line-height:1.7;margin:0">
-      Riceverai subito una seconda email con il link di accesso a <strong>NeuroAtlas</strong>.<br>
-      La prossima digest arriva <strong>lunedì alle 14:00</strong>.
+      You'll receive a second email shortly with your access link to <strong>NeuroAtlas</strong>.<br>
+      Your next digest arrives <strong>Monday at 14:00</strong>.
     </p>
   </div>
 
   <p style="text-align:center;font-size:12px;color:#bbb;margin-top:24px;line-height:1.7">
-    NeuroDigest · Curato da Vincenzo Laterza, MD, Neurologo<br>
-    Domande? Rispondi a questa email.
+    NeuroDigest · Curated by Vincenzo Laterza, MD, Neurologist<br>
+    Questions? Reply to this email.
   </p>
 </div>
 </body></html>
@@ -145,7 +145,7 @@ class handler(BaseHTTPRequestHandler):
             resend.Emails.send({
                 "from":    FROM_ADDR,
                 "to":      [email],
-                "subject": "Il tuo accesso a NeuroAtlas è pronto",
+                "subject": "Your NeuroAtlas access is ready",
                 "html": f"""
 <!DOCTYPE html><html><head><meta charset="utf-8"></head><body
   style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
@@ -162,18 +162,18 @@ class handler(BaseHTTPRequestHandler):
   <div style="background:#fff;border:1px solid #ddd;border-top:3px solid #c8a840;padding:40px 36px">
     <h1 style="font-family:Georgia,serif;font-size:26px;color:#1a1a2e;
                margin:0 0 16px;line-height:1.2">
-      NeuroAtlas è pronto.
+      NeuroAtlas is ready.
     </h1>
     <p style="font-size:16px;color:#555;line-height:1.7;margin:0 0 28px">
-      La libreria completa di segni neurologici — schede di riferimento clinico
-      per il letto del paziente, il giro visite, l'ambulatorio.
+      The complete neurological signs library — bedside clinical reference cards
+      for ward rounds, outpatient clinics, and everything in between.
     </p>
 
     <div style="text-align:center;margin:0 0 28px">
       <a href="{PLATFORM_URL}" style="display:inline-block;background:#1a1a2e;
          color:#fff;text-decoration:none;padding:16px 36px;
          font-size:15px;font-weight:700;letter-spacing:.3px;border-radius:3px">
-        Apri NeuroAtlas →
+        Open NeuroAtlas →
       </a>
     </div>
 
@@ -181,27 +181,27 @@ class handler(BaseHTTPRequestHandler):
                 padding:20px 24px;margin-bottom:24px">
       <p style="font-size:11px;font-weight:700;letter-spacing:1.4px;
                 text-transform:uppercase;color:#aaa;margin:0 0 12px">
-        Cosa trovi su NeuroAtlas
+        What you'll find on NeuroAtlas
       </p>
       <p style="font-size:14px;color:#555;line-height:1.8;margin:0">
-        📋 &nbsp;<strong>30 Segni Neurologici</strong> — tecnica passo-passo,
-        pathway anatomico, sensibilità &amp; specificità, varianti, video<br>
-        🔺 &nbsp;<strong>Triadi Cliniche</strong> — in arrivo<br>
-        📊 &nbsp;<strong>Grafici &amp; Diagrammi</strong> — in arrivo<br>
-        🗂️ &nbsp;<strong>Archivio completo</strong> — in arrivo
+        📋 &nbsp;<strong>30 Neurological Signs</strong> — step-by-step technique,
+        anatomical pathway, sensitivity &amp; specificity, variants, video<br>
+        🔺 &nbsp;<strong>Clinical Triads</strong> — coming soon<br>
+        📊 &nbsp;<strong>Graphs &amp; Diagrams</strong> — coming soon<br>
+        🗂️ &nbsp;<strong>Full Archive</strong> — coming soon
       </p>
     </div>
 
     <hr style="border:none;border-top:1px solid #eee;margin:0 0 20px">
     <p style="font-size:13px;color:#999;line-height:1.7;margin:0">
-      Salva questo link — è il tuo accesso diretto a NeuroAtlas.<br>
-      Domande? Rispondi a questa email.
+      Save this link — it's your direct access to NeuroAtlas.<br>
+      Questions? Reply to this email.
     </p>
   </div>
 
   <p style="text-align:center;font-size:12px;color:#bbb;margin-top:24px;line-height:1.7">
-    NeuroDigest · Curato da Vincenzo Laterza, MD, Neurologo<br>
-    Gestisci il tuo abbonamento tramite il portale Stripe.
+    NeuroDigest · Curated by Vincenzo Laterza, MD, Neurologist<br>
+    Manage your subscription anytime via the Stripe billing portal.
   </p>
 </div>
 </body></html>
