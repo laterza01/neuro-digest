@@ -65,7 +65,7 @@ Schema:
   "year": integer,
   "visuals": [
     {
-      "type": "flowchart" | "table" | "bar_chart" | "timeline",
+      "type": "flowchart" | "table" | "bar_chart" | "timeline" | "schematic",
       "title": string,
       "description": string,
       "data": {}
@@ -76,40 +76,59 @@ Schema:
 Data structure by type:
 
 flowchart:
-{
-  "nodes": [{"id": string, "label": string, "type": "decision"|"action"|"endpoint"}],
-  "edges": [{"from": string, "to": string, "label": string}]
-}
-— max 8 nodes total; labels ≤ 6 words each; linear or simple branching only
+{ "nodes": [{"id": string, "label": string, "type": "decision"|"action"|"endpoint"}],
+  "edges": [{"from": string, "to": string, "label": string}] }
+— max 8 nodes; labels ≤ 6 words; linear or simple branching only
 
 table:
-{
-  "headers": [string],
-  "rows": [[string]]
-}
-— max 3 columns, max 8 rows; cell text ≤ 8 words each
+{ "headers": [string], "rows": [[string]] }
+— max 3 columns, max 8 rows; cell text ≤ 8 words
 
 bar_chart:
-{
-  "x_label": string,
-  "y_label": string,
-  "series": [{"name": string, "values": [{"label": string, "value": number}]}]
-}
-— max 1-2 series, max 6 bars; only use if you have real numeric values
+{ "x_label": string, "y_label": string,
+  "series": [{"name": string, "values": [{"label": string, "value": number}]}] }
+— max 2 series, max 6 bars; ONLY use if you have real numeric values
 
 timeline:
+{ "events": [{"time": string, "label": string, "note": string}] }
+— max 7 events; "time" ≤ 5 chars; "label" ≤ 5 words; "note" ≤ 8 words
+
+schematic:
 {
-  "events": [{"time": string, "label": string, "note": string}]
+  "caption": string,
+  "compartments": [
+    {
+      "id": string,
+      "label": string,
+      "color": string,
+      "entities": [
+        { "id": string, "label": string, "sublabel": string,
+          "type": "molecule"|"cell"|"receptor"|"barrier"|"organ"|"process",
+          "color": string }
+      ]
+    }
+  ],
+  "flows": [
+    { "from": string, "to": string, "label": string,
+      "style": "arrow"|"inhibit"|"dashed" }
+  ]
 }
-— max 7 events; "time" ≤ 5 chars (e.g. "0 min", "Day 7"); "label" ≤ 5 words; "note" ≤ 8 words
+— Use for pathophysiology, disease mechanisms, BBB models, receptor signalling, drug targets.
+— max 4 compartments; max 3 entities per compartment; max 8 flows.
+— compartment colors: soft pastels (e.g. "#fce4ec", "#e3f2fd", "#e8f5e9", "#fff8e1").
+— entity colors: vivid but not neon (e.g. "#e53935", "#1565c0", "#2e7d32", "#f57f17").
+— labels ≤ 4 words; sublabel ≤ 5 words (use for e.g. "AQP4-IgG", "IL-6↑", "CD20+").
+— flows reference entity IDs, not compartment IDs.
 
 Rules:
-- Maximum 2 visuals. Choose the 2 most clinically actionable.
-- Prefer: flowchart for algorithms, table for dosing/criteria, timeline for monitoring schedules.
-- Only use bar_chart if you have real, specific numeric values from the guideline.
-- Keep all text SHORT — labels will be rendered inside boxes.
-- Never invent numeric data for bar_chart; omit it if values are absent.
-- If only 1 visual is clearly supported by the data, return just 1.
+- Maximum 2 visuals. Choose the 2 most informative and complementary.
+- USE schematic when the topic has a clear mechanism, signalling pathway, or anatomical model
+  (e.g. NMOSD, neuroinflammation, Alzheimer amyloid cascade, BBB disruption, myasthenia gravis,
+  anti-NMDAR encephalitis, Parkinson α-synuclein propagation).
+- Prefer flowchart for clinical algorithms; table for dosing/criteria; timeline for monitoring.
+- Only use bar_chart with real numeric values.
+- Keep ALL text short — it will be rendered inside graphic elements.
+- Never invent numeric data.
 """
 
 
@@ -471,6 +490,132 @@ def render_timeline(visual: dict, stem: Path, source: str = "") -> tuple[Path, P
     return _save(fig, stem)
 
 
+# ── Schematic ─────────────────────────────────────────────────────────────────
+# Biological shape helpers
+def _pill(ax, cx, cy, w, h, color, text, sublabel="", fontsize=8.5, textcolor="white"):
+    """Draw a pill-shaped entity badge."""
+    box = FancyBboxPatch((cx - w/2, cy - h/2), w, h,
+                          boxstyle="round,pad=0.04",
+                          facecolor=color, edgecolor="white",
+                          linewidth=1.2, zorder=4)
+    ax.add_patch(box)
+    if sublabel:
+        ax.text(cx, cy + h*0.12, text, ha="center", va="center",
+                fontsize=fontsize, color=textcolor, fontweight="bold",
+                zorder=5, linespacing=1.2)
+        ax.text(cx, cy - h*0.28, sublabel, ha="center", va="center",
+                fontsize=fontsize - 1.5, color=textcolor, alpha=0.88,
+                zorder=5)
+    else:
+        ax.text(cx, cy, text, ha="center", va="center",
+                fontsize=fontsize, color=textcolor, fontweight="bold",
+                zorder=5, linespacing=1.2)
+
+
+def _compartment_band(ax, y0, height, color, label, fig_w):
+    """Draw a horizontal biological compartment band."""
+    band = mpatches.Rectangle((0, y0), fig_w, height,
+                                facecolor=color, edgecolor="#cccccc",
+                                linewidth=0.6, zorder=1, alpha=0.55)
+    ax.add_patch(band)
+    ax.text(0.22, y0 + height / 2, label,
+            ha="center", va="center",
+            fontsize=8.5, color="#555555", fontweight="bold",
+            rotation=90, zorder=2)
+
+
+def render_schematic(visual: dict, stem: Path, source: str = "") -> tuple[Path, Path]:
+    """
+    Render a biological mechanism/pathophysiology schematic.
+    Compartments are horizontal bands; entities are pill badges;
+    flows are styled arrows between entity positions.
+    """
+    data         = visual["data"]
+    compartments = data.get("compartments", [])
+    flows        = data.get("flows", [])
+    caption      = data.get("caption", "")
+
+    n_comp  = len(compartments)
+    FIG_W   = 9.0
+    COMP_H  = 1.7          # height per compartment band
+    FIG_H   = max(4.5, n_comp * COMP_H + 1.2)
+
+    fig, ax = plt.subplots(figsize=(FIG_W, FIG_H))
+    ax.set_xlim(0, FIG_W)
+    ax.set_ylim(0, FIG_H)
+    ax.axis("off")
+
+    # Entity position registry {entity_id: (cx, cy)}
+    positions: dict[str, tuple] = {}
+    PILL_W, PILL_H = 1.55, 0.52
+
+    # Draw compartment bands + place entity pills
+    for ci, comp in enumerate(compartments):
+        y0     = FIG_H - (ci + 1) * COMP_H
+        color  = comp.get("color", "#f5f5f5")
+        label  = comp.get("label", "")
+        entities = comp.get("entities", [])
+
+        _compartment_band(ax, y0, COMP_H, color, label, FIG_W)
+
+        # Distribute entities evenly inside the band
+        n_ent = len(entities)
+        xs    = np.linspace(1.2, FIG_W - 0.8, max(n_ent, 1))
+        cy    = y0 + COMP_H / 2
+
+        for ent, cx in zip(entities, xs):
+            eid     = ent["id"]
+            elabel  = "\n".join(textwrap.wrap(ent.get("label", ""), 12))
+            esub    = ent.get("sublabel", "")
+            ecolor  = ent.get("color", "#0072B2")
+            positions[eid] = (cx, cy)
+            _pill(ax, cx, cy, PILL_W, PILL_H, ecolor, elabel, esub)
+
+    # Draw flows
+    FLOW_COLORS = {"arrow": "#444444", "inhibit": "#CC3311", "dashed": "#888888"}
+    for flow in flows:
+        fid, tid = flow.get("from"), flow.get("to")
+        if fid not in positions or tid not in positions:
+            continue
+        x1, y1 = positions[fid]
+        x2, y2 = positions[tid]
+        style  = flow.get("style", "arrow")
+        color  = FLOW_COLORS.get(style, "#444444")
+        ls     = "--" if style == "dashed" else "-"
+
+        # Arrow tip: inhibit = flat bar, else normal arrowhead
+        arrowstyle = "-|>" if style != "inhibit" else "-["
+        rad = 0.25 if abs(y2 - y1) < 0.1 else 0.0  # curve if same row
+
+        ax.annotate("", xy=(x2, y2 + PILL_H/2 * np.sign(y1-y2)),
+                    xytext=(x1, y1 - PILL_H/2 * np.sign(y1-y2)),
+                    arrowprops=dict(
+                        arrowstyle=arrowstyle, color=color, lw=1.4,
+                        linestyle=ls, mutation_scale=11,
+                        connectionstyle=f"arc3,rad={rad}",
+                    ), zorder=3)
+
+        lbl = flow.get("label", "")
+        if lbl:
+            mx = (x1 + x2) / 2 + (0.12 if rad else 0)
+            my = (y1 + y2) / 2
+            ax.text(mx, my, lbl, fontsize=7, color=color, ha="center",
+                    va="center", fontstyle="italic",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="white",
+                              edgecolor="none", alpha=0.8), zorder=5)
+
+    # Caption
+    if caption:
+        fig.text(0.5, 0.01, caption, ha="center", va="bottom",
+                 fontsize=7.5, color="#666666", fontstyle="italic",
+                 wrap=True)
+
+    ax.set_title(visual["title"], fontsize=12, fontweight="bold",
+                 color=C_NAVY, pad=10, loc="left", x=0.03)
+    _watermark(fig, source)
+    return _save(fig, stem)
+
+
 # ── Input sanitisation (runs before every renderer) ───────────────────────────
 def _trunc(text: str, max_words: int) -> str:
     """Truncate to max_words words, appending '…' if cut."""
@@ -537,11 +682,33 @@ def _sanitize_timeline(data: dict) -> dict:
     return {"events": events}
 
 
+def _sanitize_schematic(data: dict) -> dict:
+    """Clamp compartments ≤ 4, entities ≤ 3 each, flows ≤ 8, labels short."""
+    compartments = []
+    all_entity_ids = set()
+    for comp in data.get("compartments", [])[:4]:
+        entities = []
+        for ent in comp.get("entities", [])[:3]:
+            ent = dict(ent)
+            ent["label"]    = _trunc(ent.get("label", ""), 4)
+            ent["sublabel"] = _trunc(ent.get("sublabel", ""), 5)
+            entities.append(ent)
+            all_entity_ids.add(ent["id"])
+        compartments.append({**comp, "entities": entities})
+    flows = [
+        {**f, "label": _trunc(f.get("label", ""), 4)}
+        for f in data.get("flows", [])[:8]
+        if f.get("from") in all_entity_ids and f.get("to") in all_entity_ids
+    ]
+    return {**data, "compartments": compartments, "flows": flows}
+
+
 SANITIZERS = {
     "flowchart":  _sanitize_flowchart,
     "table":      _sanitize_table,
     "bar_chart":  _sanitize_bar_chart,
     "timeline":   _sanitize_timeline,
+    "schematic":  _sanitize_schematic,
 }
 
 
@@ -567,6 +734,7 @@ RENDERERS = {
     "table":      render_table,
     "bar_chart":  render_bar_chart,
     "timeline":   render_timeline,
+    "schematic":  render_schematic,
 }
 
 def render_visual(visual: dict, stem: Path, source: str = "") -> tuple[Path, Path] | None:

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NeuroDigest Plus — Start your free trial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #1a1a2e;
+      --red:  #c0392b;
+      --gold: #b8933a;
+      --bg:   #f7f7f5;
+      --serif: 'Playfair Display', Georgia, serif;
+      --body: 'Source Serif 4', Georgia, serif;
+      --sans: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--sans); background: var(--bg); color: #333; min-height: 100vh; }
+
+    /* ── TOPBAR ── */
+    .topbar {
+      background: var(--navy); padding: 14px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar-brand {
+      font-family: var(--serif); font-size: 20px; color: #fff;
+      letter-spacing: -.3px;
+    }
+    .topbar-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.8px;
+      text-transform: uppercase; color: var(--gold);
+      border: 1px solid var(--gold); padding: 4px 12px; border-radius: 2px;
+    }
+    .topbar-back {
+      font-size: 12px; color: #778; text-decoration: none;
+      letter-spacing: .3px;
+    }
+    .topbar-back:hover { color: #aaa; }
+
+    /* ── LAYOUT ── */
+    .page {
+      max-width: 1000px; margin: 0 auto;
+      padding: 56px 24px 80px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 48px;
+      align-items: start;
+    }
+    @media (max-width: 780px) {
+      .page { grid-template-columns: 1fr; }
+      .checkout-col { order: -1; }
+    }
+
+    /* ── LEFT COLUMN — BENEFITS ── */
+    .eyebrow {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.8px;
+      text-transform: uppercase; color: var(--gold);
+      margin-bottom: 16px; display: block;
+    }
+    h1 {
+      font-family: var(--serif); font-size: clamp(28px, 4vw, 40px);
+      color: var(--navy); line-height: 1.15;
+      letter-spacing: -.5px; margin-bottom: 16px;
+    }
+    .hero-sub {
+      font-size: 17px; color: #666; line-height: 1.7;
+      font-family: var(--body); margin-bottom: 40px;
+      max-width: 500px;
+    }
+
+    /* pull quote */
+    .pull-quote {
+      border-left: 3px solid var(--gold);
+      padding: 16px 22px;
+      background: #fff;
+      margin-bottom: 40px;
+    }
+    .pull-quote p {
+      font-family: var(--body); font-style: italic;
+      font-size: 16px; color: #444; line-height: 1.7;
+    }
+    .pull-quote cite {
+      display: block; margin-top: 8px;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+      text-transform: uppercase; color: #aaa; font-style: normal;
+    }
+
+    /* features list */
+    .features-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.6px;
+      text-transform: uppercase; color: #aaa; margin-bottom: 20px;
+    }
+    .feature-list { list-style: none; margin-bottom: 40px; }
+    .feature-list li {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 16px 0; border-bottom: 1px solid #ede9e3;
+    }
+    .feature-list li:last-child { border-bottom: none; }
+    .feat-icon {
+      flex-shrink: 0; width: 36px; height: 36px;
+      background: var(--navy); border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .feat-text {}
+    .feat-title {
+      font-weight: 700; font-size: 15px; color: var(--navy);
+      margin-bottom: 3px;
+    }
+    .feat-desc { font-size: 13px; color: #777; line-height: 1.6; }
+    .feat-tag {
+      display: inline-block; margin-top: 4px;
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--red);
+    }
+    .feat-tag.gold { color: var(--gold); }
+
+    /* free vs plus mini-compare */
+    .compare-strip {
+      background: var(--navy); padding: 20px 24px;
+      margin-bottom: 40px; border-radius: 3px;
+    }
+    .compare-strip p {
+      font-size: 13px; color: #8888aa; line-height: 1.8;
+    }
+    .compare-strip strong { color: #fff; }
+    .compare-strip .plus-items {
+      margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .compare-strip .chip {
+      font-size: 11px; font-weight: 700; letter-spacing: .8px;
+      text-transform: uppercase; padding: 5px 12px;
+      border: 1px solid #334; border-radius: 100px; color: #99aacc;
+    }
+    .compare-strip .chip.active {
+      border-color: var(--gold); color: var(--gold);
+    }
+
+    /* ── RIGHT COLUMN — CHECKOUT ── */
+    .checkout-col { position: sticky; top: 24px; }
+    .checkout-box {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-top: 3px solid var(--navy);
+      padding: 32px 28px;
+    }
+
+    .plan-toggle {
+      display: flex; margin-bottom: 24px;
+      border: 1px solid #ddd; border-radius: 3px; overflow: hidden;
+    }
+    .plan-btn {
+      flex: 1; padding: 11px 8px; text-align: center;
+      background: #fff; border: none; cursor: pointer;
+      font-size: 13px; font-family: var(--sans); color: #777;
+      transition: all .15s; position: relative;
+    }
+    .plan-btn.active {
+      background: var(--navy); color: #fff; font-weight: 700;
+    }
+    .plan-btn .save-badge {
+      display: block; font-size: 10px; font-weight: 700;
+      letter-spacing: .6px; text-transform: uppercase;
+      color: var(--gold); margin-top: 1px;
+    }
+    .plan-btn.active .save-badge { color: #c8a840; }
+
+    .price-display { text-align: center; margin-bottom: 24px; }
+    .price-big {
+      font-family: var(--serif); font-size: 52px; font-weight: 700;
+      color: var(--navy); line-height: 1;
+    }
+    .price-big sup { font-size: 24px; vertical-align: super; }
+    .price-period { font-size: 13px; color: #999; margin-top: 4px; }
+    .price-trial-note {
+      display: inline-block; margin-top: 8px;
+      font-size: 12px; font-weight: 700;
+      color: var(--red); letter-spacing: .3px;
+    }
+
+    .checkout-divider {
+      border: none; border-top: 1px solid #eee;
+      margin: 20px 0;
+    }
+
+    .form-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: #aaa; margin-bottom: 7px;
+      display: block;
+    }
+    .form-input {
+      width: 100%; padding: 13px 14px;
+      border: 1px solid #ddd; border-radius: 3px;
+      font-size: 15px; font-family: var(--sans); color: #333;
+      outline: none; margin-bottom: 14px;
+      transition: border-color .15s;
+    }
+    .form-input:focus { border-color: var(--navy); }
+
+    .btn-checkout {
+      width: 100%; padding: 16px;
+      background: var(--navy); color: #fff;
+      border: none; border-radius: 3px; cursor: pointer;
+      font-size: 15px; font-weight: 700; font-family: var(--sans);
+      letter-spacing: .3px; transition: background .2s;
+      margin-bottom: 12px;
+    }
+    .btn-checkout:hover { background: #2d2d50; }
+    .btn-checkout:disabled {
+      background: #ccc; cursor: not-allowed;
+    }
+
+    .checkout-note {
+      text-align: center; font-size: 12px; color: #bbb;
+      line-height: 1.7;
+    }
+    .checkout-note a { color: #999; }
+
+    .security-row {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px; margin-top: 16px;
+      font-size: 11px; color: #bbb; letter-spacing: .3px;
+    }
+
+    /* what happens next */
+    .next-steps {
+      margin-top: 24px; padding: 18px 20px;
+      background: #f9f8f6; border: 1px solid #ede9e3;
+      border-radius: 3px;
+    }
+    .next-steps p {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.4px;
+      text-transform: uppercase; color: #aaa; margin-bottom: 10px;
+    }
+    .next-steps ol {
+      padding-left: 18px; font-size: 13px; color: #666;
+      line-height: 1.8;
+    }
+
+    /* ── FAQ ── */
+    .faq { max-width: 1000px; margin: 0 auto; padding: 0 24px 72px; }
+    .faq h2 {
+      font-family: var(--serif); font-size: 24px; color: var(--navy);
+      margin-bottom: 28px;
+    }
+    .faq-item { border-bottom: 1px solid #e8e4de; padding: 18px 0; }
+    .faq-q {
+      font-size: 15px; font-weight: 700; color: var(--navy);
+      margin-bottom: 6px;
+    }
+    .faq-a { font-size: 14px; color: #666; line-height: 1.7; }
+  </style>
+</head>
+<body>
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <span class="topbar-brand">NeuroDigest</span>
+    <span class="topbar-badge">Plus ✦</span>
+    <a href="../landing.html" class="topbar-back">← Back</a>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="page">
+
+    <!-- ── LEFT: BENEFITS ── -->
+    <div class="benefits-col">
+
+      <span class="eyebrow">NeuroDigest Plus</span>
+      <h1>The newsletter was<br>just the beginning.</h1>
+      <p class="hero-sub">
+        A complete clinical reference platform — built for the way neurologists
+        actually think. At the bedside, before a ward round, mid-clinic.
+      </p>
+
+      <!-- pull quote -->
+      <div class="pull-quote">
+        <p>"I don't have time to read every journal. But I need to know what
+        changed this week — and I need the reference when I'm standing at the
+        bedside. NeuroDigest Plus gives me both."</p>
+        <cite>Consultant Neurologist, NHS</cite>
+      </div>
+
+      <!-- what you get -->
+      <p class="features-label">What's included in Plus</p>
+
+      <ul class="feature-list">
+        <li>
+          <div class="feat-icon">📰</div>
+          <div class="feat-text">
+            <div class="feat-title">Weekly NeuroDigest — full edition</div>
+            <div class="feat-desc">
+              Every Monday: a synthesized briefing of the week's neurology
+              literature across 12 clinical areas — Q1 and Q2 journals,
+              one actionable take-home. Also included in Free.
+            </div>
+            <span class="feat-tag">Included in Free</span>
+          </div>
+        </li>
+        <li>
+          <div class="feat-icon">📋</div>
+          <div class="feat-text">
+            <div class="feat-title">30 Neurological Signs — full reference cards</div>
+            <div class="feat-desc">
+              Step-by-step technique, anatomical pathway, sensitivity &amp;
+              specificity data with citations, clinical variants, and video
+              demonstrations. The bedside reference you always wished existed.
+              The free tier shows you the first 3 steps. Plus unlocks everything.
+            </div>
+            <span class="feat-tag gold">✦ Plus only · Live now</span>
+          </div>
+        </li>
+        <li>
+          <div class="feat-icon">🔺</div>
+          <div class="feat-text">
+            <div class="feat-title">Clinical Triads Library</div>
+            <div class="feat-desc">
+              30 diagnostic triads — the pattern-recognition shortcuts that
+              separate a good neurologist from a great one. Triad components,
+              mechanism, differentials, and the clinical pearl most textbooks
+              bury in footnotes.
+            </div>
+            <span class="feat-tag gold">✦ Plus only · Coming soon</span>
+          </div>
+        </li>
+        <li>
+          <div class="feat-icon">📊</div>
+          <div class="feat-text">
+            <div class="feat-title">Graphs, Diagrams &amp; Visual Aids</div>
+            <div class="feat-desc">
+              Anatomical pathways, diagnostic algorithms, drug mechanism
+              schematics. The visuals your neurology training gave you once
+              and expected you to remember forever — updated, annotated,
+              practice-ready.
+            </div>
+            <span class="feat-tag gold">✦ Plus only · Coming soon</span>
+          </div>
+        </li>
+        <li>
+          <div class="feat-icon">🗂️</div>
+          <div class="feat-text">
+            <div class="feat-title">Full Edition Archive</div>
+            <div class="feat-desc">
+              Every digest and guidelines edition, searchable by topic,
+              condition, and clinical area. Find that trial you half-remember
+              from three months ago in seconds — not in a Gmail thread.
+            </div>
+            <span class="feat-tag gold">✦ Plus only · Coming soon</span>
+          </div>
+        </li>
+      </ul>
+
+      <!-- compare strip -->
+      <div class="compare-strip">
+        <p><strong>Free tier</strong> — weekly digest + monthly guidelines edition</p>
+        <p style="margin-top:6px"><strong>Plus</strong> — everything above, plus:</p>
+        <div class="plus-items">
+          <span class="chip active">Neurological Signs</span>
+          <span class="chip active">Clinical Triads</span>
+          <span class="chip active">Sensitivity data</span>
+          <span class="chip active">Video demos</span>
+          <span class="chip active">Diagrams</span>
+          <span class="chip active">Archive</span>
+          <span class="chip active">PDF cards</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── RIGHT: CHECKOUT ── -->
+    <div class="checkout-col">
+      <div class="checkout-box">
+
+        <!-- plan toggle -->
+        <div class="plan-toggle">
+          <button class="plan-btn" id="btn-monthly" onclick="selectPlan('monthly')">
+            Monthly
+            <span class="save-badge">€4.99/mo</span>
+          </button>
+          <button class="plan-btn active" id="btn-annual" onclick="selectPlan('annual')">
+            Annual
+            <span class="save-badge">Save 35%</span>
+          </button>
+        </div>
+
+        <!-- price display -->
+        <div class="price-display">
+          <div class="price-big" id="price-big"><sup>€</sup><span id="price-num">39</span></div>
+          <div class="price-period" id="price-period">per year · €3.25/month</div>
+          <span class="price-trial-note">✦ 7-day free trial — no charge today</span>
+        </div>
+
+        <hr class="checkout-divider">
+
+        <!-- email form -->
+        <label class="form-label" for="email-input">Your email address</label>
+        <input
+          class="form-input" type="email" id="email-input"
+          placeholder="you@hospital.com" autocomplete="email"
+        >
+
+        <button class="btn-checkout" id="checkout-btn" onclick="startCheckout()">
+          Start free trial →
+        </button>
+
+        <p class="checkout-note">
+          No credit card required to start your trial.<br>
+          Cancel anytime from your account &mdash; one click, no questions asked.
+        </p>
+
+        <div class="security-row">
+          🔒 &nbsp;Secured by Stripe &nbsp;·&nbsp; 256-bit SSL
+        </div>
+
+        <!-- what happens next -->
+        <div class="next-steps">
+          <p>What happens next</p>
+          <ol>
+            <li>Enter your email and click Start</li>
+            <li>You'll be redirected to Stripe's secure checkout</li>
+            <li>Trial starts immediately — full access from day one</li>
+            <li>Card charged after 7 days unless you cancel</li>
+          </ol>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FAQ -->
+  <div class="faq">
+    <h2>Frequently asked questions</h2>
+
+    <div class="faq-item">
+      <div class="faq-q">What's included in the free trial?</div>
+      <div class="faq-a">
+        Full Plus access for 7 days — all neurological sign cards unlocked,
+        clinical triads, sensitivity data, everything. No restrictions.
+        Your card is not charged until the trial ends.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Can I cancel anytime?</div>
+      <div class="faq-a">
+        Yes. Cancel from your account page at any time. No questions asked,
+        no cancellation fees. If you cancel during the trial, you won't be
+        charged at all.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What happens to my free access if I don't upgrade?</div>
+      <div class="faq-a">
+        Your free subscription stays active. You'll continue receiving the
+        weekly digest and monthly guidelines edition. The Plus-only content
+        (sign cards, triads, diagrams) will be locked after your trial ends.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Is this for individuals or institutions?</div>
+      <div class="faq-a">
+        Both. Individual subscriptions are billed directly to your card.
+        For department or institutional access, contact us —
+        group pricing is available.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Can I switch between monthly and annual?</div>
+      <div class="faq-a">
+        Yes, at any time from your account page. Switching to annual
+        is prorated — you only pay for the remaining period.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Plan selection ─────────────────────────────────────────────────────────
+    var currentPlan = 'annual';
+
+    function selectPlan(plan) {
+      currentPlan = plan;
+      document.getElementById('btn-monthly').classList.toggle('active', plan === 'monthly');
+      document.getElementById('btn-annual').classList.toggle('active',  plan === 'annual');
+
+      if (plan === 'monthly') {
+        document.getElementById('price-num').textContent    = '4.99';
+        document.getElementById('price-period').textContent = 'per month · billed monthly';
+      } else {
+        document.getElementById('price-num').textContent    = '39';
+        document.getElementById('price-period').textContent = 'per year · €3.25/month';
+      }
+    }
+
+    // ── Pre-select plan from URL param (?plan=annual / ?plan=monthly) ──────────
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var p = params.get('plan');
+      if (p === 'monthly') selectPlan('monthly');
+    })();
+
+    // ── Checkout ───────────────────────────────────────────────────────────────
+    async function startCheckout() {
+      var email = document.getElementById('email-input').value.trim();
+      if (!email || !email.includes('@')) {
+        document.getElementById('email-input').focus();
+        document.getElementById('email-input').style.borderColor = '#c0392b';
+        return;
+      }
+      document.getElementById('email-input').style.borderColor = '';
+
+      var btn = document.getElementById('checkout-btn');
+      btn.textContent = 'Redirecting to checkout…';
+      btn.disabled = true;
+
+      var PRICE_IDS = {
+        monthly: 'price_1Td8PXLUNGp42dWtdAHLDt1D',  // €4.99/mo
+        annual:  'price_1Td8QDLUNGp42dWteiAvbfJX'   // €39/yr
+      };
+      try {
+        var res = await fetch('/api/create-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            priceId: PRICE_IDS[currentPlan],
+            email:   email
+          })
+        });
+        var data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+      } catch (err) {
+        btn.textContent = 'Something went wrong — try again';
+        btn.disabled = false;
+      }
+    }
+
+    // Enter key on email input
+    document.getElementById('email-input').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') startCheckout();
+    });
+  </script>
+
+</body>
+</html>

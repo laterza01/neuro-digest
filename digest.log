@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/vincenzo/neuro-digest/digest.py", line 29, in <module>
+    import anthropic
+ModuleNotFoundError: No module named 'anthropic'
+Traceback (most recent call last):
+  File "/Users/vincenzo/neuro-digest/digest.py", line 29, in <module>
+    import anthropic
+ModuleNotFoundError: No module named 'anthropic'

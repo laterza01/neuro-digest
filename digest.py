@@ -281,8 +281,6 @@ table{border-collapse:collapse}
   td,p,div,span{
     word-break:break-word!important;
     overflow-wrap:break-word!important;
-    -webkit-hyphens:auto!important;
-    hyphens:auto!important;
     max-width:100%!important;
   }
 
@@ -673,26 +671,31 @@ def fetch_supabase_subscribers() -> list[dict]:
 
 # ── Timezone-aware filtering ──────────────────────────────────────────────────
 
-def filter_by_local_time(
-    subscribers: list[dict],
-    target_hour_start: int = 8,
-    target_hour_end: int = 20,
-    target_weekday: int = 0,   # 0 = Monday
-) -> list[dict]:
+# Timezones considered "European" for the 14:00 delivery target.
+# All others receive the digest any time during their local Monday.
+_EUROPEAN_TZ_PREFIXES = ("Europe/", "Atlantic/Azores", "Atlantic/Canary",
+                          "Atlantic/Madeira", "Africa/Ceuta")
+
+def _is_european(tz_str: str) -> bool:
+    return any(tz_str.startswith(p) for p in _EUROPEAN_TZ_PREFIXES)
+
+
+def filter_for_monday_send(subscribers: list[dict]) -> list[dict]:
     """
-    Return subscribers for whom it is currently between target_hour_start and
-    target_hour_end (inclusive) on target_weekday in their local timezone.
+    Return subscribers eligible to receive the digest in this cron run.
 
-    GitHub Actions scheduled crons are unreliable in timing — they can fire
-    hours late. We use a wide daytime window (8–20 local) so the email is
-    delivered on the correct day regardless of when GitHub runs the job.
-    sends_log deduplication guarantees each subscriber gets exactly one email
-    per digest, no matter how many cron runs hit the window.
+    Rules
+    ─────
+    European timezones  → it must be Monday AND local hour 13–15
+                          (targets 14:00 delivery; 3-hour window absorbs
+                          GitHub Actions timing jitter of up to ±1 h)
+    All other timezones → it must be Monday (any hour 0–23 local)
 
-    Timezone fallback order:
-      1. sub["timezone"]  (stored at signup via browser Intl API)
-      2. 'Europe/Rome'    (default for subscribers who signed up before
-                           the timezone column was added)
+    Timezone fallback: Europe/Rome for subscribers with no stored timezone
+    (signed up before the timezone column was added).
+
+    sends_log deduplication ensures each subscriber receives exactly one
+    copy per digest regardless of how many cron runs hit their window.
     """
     now = datetime.now(timezone.utc)
     eligible: list[dict] = []
@@ -701,11 +704,20 @@ def filter_by_local_time(
         try:
             local_now = now.astimezone(ZoneInfo(raw_tz))
         except (ZoneInfoNotFoundError, Exception):
-            # Invalid or unknown timezone string — fall back to Europe/Rome
             local_now = now.astimezone(ZoneInfo("Europe/Rome"))
-        if (local_now.weekday() == target_weekday
-                and target_hour_start <= local_now.hour <= target_hour_end):
+            raw_tz = "Europe/Rome"
+
+        if local_now.weekday() != 0:   # not Monday locally → skip
+            continue
+
+        if _is_european(raw_tz):
+            # Target 14:00 — accept 13:00–15:59 to absorb GitHub jitter
+            if 13 <= local_now.hour <= 15:
+                eligible.append(sub)
+        else:
+            # Non-European: any time on their local Monday
             eligible.append(sub)
+
     return eligible
 
 
@@ -1185,41 +1197,45 @@ def build_guidelines_html_email(
           <ol style="margin:0;padding:0 0 0 20px">{rec_items}</ol>
         </div>"""
 
-    # Sources
+    # Sources — block layout (no width:1% table, avoids vertical-text on mobile)
     sources = guideline.get("sources", [])
     sources_html = ""
     if sources:
         items = ""
         for s in sources:
-            doi  = s.get("doi", "")
-            url  = s.get("url", "")
-            href = f"https://doi.org/{doi}" if doi else url
+            doi    = s.get("doi", "")
+            url    = s.get("url", "")
+            href   = f"https://doi.org/{doi}" if doi else url
             issuer = f"{s.get('issuing_body', '')} {s.get('year', '')}".strip()
-            label = (
-                f'<a href="{href}" style="font-size:10px;font-weight:700;letter-spacing:1px;'
-                f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif;'
-                f'text-decoration:none;word-break:break-word">{issuer}</a>'
-                if href else
-                f'<span style="font-size:10px;font-weight:700;letter-spacing:1px;'
-                f'text-transform:uppercase;color:#aaa;font-family:Helvetica,Arial,sans-serif;'
-                f'word-break:break-word">{issuer}</span>'
-            )
+            title_text = s.get("title", "")
+            if href:
+                issuer_html = (
+                    f'<a href="{href}" style="font-size:10px;font-weight:700;'
+                    f'letter-spacing:1px;text-transform:uppercase;color:{color};'
+                    f'font-family:Helvetica,Arial,sans-serif;text-decoration:none">'
+                    f'{issuer}</a>'
+                )
+            else:
+                issuer_html = (
+                    f'<span style="font-size:10px;font-weight:700;letter-spacing:1px;'
+                    f'text-transform:uppercase;color:#aaa;'
+                    f'font-family:Helvetica,Arial,sans-serif">{issuer}</span>'
+                )
             items += (
-                f'<tr>'
-                f'<td style="padding:5px 14px 5px 0;vertical-align:top;width:1%">'
-                f'{label}</td>'
-                f'<td style="padding:5px 0;font-size:12px;color:#555;'
-                f'font-family:Helvetica,Arial,sans-serif;line-height:1.55">'
-                f'{s.get("title", "")}</td>'
-                f'</tr>'
+                f'<div style="margin:0 0 9px 0;line-height:1.5">'
+                f'{issuer_html}'
+                f'<span style="font-size:10px;color:#ccc;'
+                f'font-family:Helvetica,Arial,sans-serif"> &mdash; </span>'
+                f'<span style="font-size:12px;color:#666;'
+                f'font-family:Helvetica,Arial,sans-serif">{title_text}</span>'
+                f'</div>'
             )
         sources_html = f"""
         <div style="margin-top:20px;padding-top:14px;border-top:1px solid #e8e4d8">
-          <p style="margin:0 0 8px;font-size:9px;font-weight:700;letter-spacing:2px;
+          <p style="margin:0 0 10px;font-size:9px;font-weight:700;letter-spacing:2px;
                     text-transform:uppercase;color:#bbb;
                     font-family:Helvetica,Arial,sans-serif">Sources</p>
-          <table cellpadding="0" cellspacing="0" border="0" width="100%"
-                 style="border-collapse:collapse">{items}</table>
+          {items}
         </div>"""
 
     manage_link   = (
@@ -1536,7 +1552,7 @@ def run():
         os.getenv("SUPABASE_SERVICE_KEY", ""),
     )
 
-    # ── Timezone-filtered subscriber list (same for both paths) ──────────────
+    # ── Subscriber list ───────────────────────────────────────────────────────
     print("Fetching confirmed subscribers from Supabase...")
     all_subscribers = fetch_supabase_subscribers()
     print(f"  {len(all_subscribers)} confirmed subscriber(s) total")
@@ -1546,10 +1562,11 @@ def run():
         return
 
     now_utc  = datetime.now(timezone.utc).strftime("%H:%M UTC")
-    eligible = filter_by_local_time(all_subscribers, target_hour_start=0, target_hour_end=23, target_weekday=0)
-    print(f"  {len(eligible)} subscriber(s) at Monday 14:xx local time (UTC: {now_utc})")
+    eligible = filter_for_monday_send(all_subscribers)
+    print(f"  {len(eligible)} eligible this run (UTC: {now_utc})"
+          " — EU: Mon 13–15 local · Others: any Mon hour")
     if not eligible:
-        print("  No subscribers in the 14:xx window this run — nothing to send.")
+        print("  No eligible subscribers this run — nothing to send.")
         return
 
     # ── LAST MONDAY → Guidelines Edition only, no weekly digest ──────────────
