@@ -11,6 +11,9 @@ STRIPE_SECRET_KEY      = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET  = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 SUPABASE_URL           = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY           = os.environ.get("SUPABASE_SERVICE_KEY", "")
+RESEND_API_KEY         = os.environ.get("RESEND_API_KEY", "")
+FROM_ADDR              = "NeuroDigest Plus <digest@neuro-digest.com>"
+PLATFORM_URL           = "https://neurodigest-lab.netlify.app"
 
 
 class handler(BaseHTTPRequestHandler):
@@ -83,6 +86,132 @@ class handler(BaseHTTPRequestHandler):
             }, on_conflict="email").execute()
 
         print(f"[stripe-webhook] ✓ premium activated: {email}")
+        self._send_premium_welcome(email)
+
+    def _send_premium_welcome(self, email):
+        """Send 2 emails: welcome + platform access link."""
+        if not RESEND_API_KEY:
+            print("[stripe-webhook] no RESEND_API_KEY — skipping welcome emails")
+            return
+        try:
+            import resend
+            resend.api_key = RESEND_API_KEY
+
+            # ── Email 1: Welcome ───────────────────────────────────────────────
+            resend.Emails.send({
+                "from":    FROM_ADDR,
+                "to":      [email],
+                "subject": "Welcome to NeuroDigest Plus ✦",
+                "html": f"""
+<!DOCTYPE html><html><head><meta charset="utf-8"></head><body
+  style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;padding:40px 24px">
+
+  <div style="text-align:center;margin-bottom:32px">
+    <div style="display:inline-block;background:#1a1a2e;color:#c8a840;
+                font-size:11px;font-weight:700;letter-spacing:2px;
+                text-transform:uppercase;padding:6px 16px;border-radius:2px">
+      NeuroDigest Plus ✦
+    </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #ddd;border-top:3px solid #c8a840;padding:40px 36px">
+    <h1 style="font-family:Georgia,serif;font-size:28px;color:#1a1a2e;
+               margin:0 0 16px;line-height:1.2">
+      Benvenuto in NeuroDigest Plus.
+    </h1>
+    <p style="font-size:16px;color:#555;line-height:1.7;margin:0 0 24px">
+      Il tuo accesso è ora attivo. Da questo momento hai accesso completo a tutto
+      ciò che NeuroDigest Plus include — segni neurologici, triadi cliniche,
+      dati di sensibilità e specificità, dimostrazioni video.
+    </p>
+    <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+    <p style="font-size:14px;color:#888;line-height:1.7;margin:0">
+      Riceverai subito una seconda email con il link di accesso alla piattaforma.<br>
+      La prossima digest arriva <strong>lunedì alle 14:00</strong>.
+    </p>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#bbb;margin-top:24px;line-height:1.7">
+    NeuroDigest · Curato da Vincenzo Laterza, MD, Neurologo<br>
+    Domande? Rispondi a questa email.
+  </p>
+</div>
+</body></html>
+""",
+            })
+
+            # ── Email 2: Platform access link ──────────────────────────────────
+            resend.Emails.send({
+                "from":    FROM_ADDR,
+                "to":      [email],
+                "subject": "Il tuo accesso alla piattaforma NeuroDigest Plus",
+                "html": f"""
+<!DOCTYPE html><html><head><meta charset="utf-8"></head><body
+  style="margin:0;padding:0;background:#f7f7f5;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto;padding:40px 24px">
+
+  <div style="text-align:center;margin-bottom:32px">
+    <div style="display:inline-block;background:#1a1a2e;color:#c8a840;
+                font-size:11px;font-weight:700;letter-spacing:2px;
+                text-transform:uppercase;padding:6px 16px;border-radius:2px">
+      NeuroDigest Plus ✦
+    </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #ddd;border-top:3px solid #c8a840;padding:40px 36px">
+    <h1 style="font-family:Georgia,serif;font-size:26px;color:#1a1a2e;
+               margin:0 0 16px;line-height:1.2">
+      La tua piattaforma è pronta.
+    </h1>
+    <p style="font-size:16px;color:#555;line-height:1.7;margin:0 0 28px">
+      Accedi alla libreria completa di segni neurologici, triadi cliniche
+      e materiale di riferimento clinico — direttamente dal link qui sotto.
+    </p>
+
+    <div style="text-align:center;margin:0 0 28px">
+      <a href="{PLATFORM_URL}" style="display:inline-block;background:#1a1a2e;
+         color:#fff;text-decoration:none;padding:16px 36px;
+         font-size:15px;font-weight:700;letter-spacing:.3px;border-radius:3px">
+        Accedi alla piattaforma →
+      </a>
+    </div>
+
+    <div style="background:#f9f8f6;border:1px solid #ede9e3;border-radius:3px;
+                padding:20px 24px;margin-bottom:24px">
+      <p style="font-size:11px;font-weight:700;letter-spacing:1.4px;
+                text-transform:uppercase;color:#aaa;margin:0 0 12px">
+        Cosa trovi sulla piattaforma
+      </p>
+      <p style="font-size:14px;color:#555;line-height:1.8;margin:0">
+        📋 &nbsp;<strong>30 Segni Neurologici</strong> — schede complete con tecnica,
+        pathway anatomico, sensibilità &amp; specificità, varianti, video<br>
+        🔺 &nbsp;<strong>Triadi Cliniche</strong> — in arrivo<br>
+        📊 &nbsp;<strong>Grafici &amp; Diagrammi</strong> — in arrivo<br>
+        🗂️ &nbsp;<strong>Archivio completo</strong> — in arrivo
+      </p>
+    </div>
+
+    <hr style="border:none;border-top:1px solid #eee;margin:0 0 20px">
+    <p style="font-size:13px;color:#999;line-height:1.7;margin:0">
+      Salva questo link — è il tuo accesso diretto alla piattaforma.<br>
+      Domande? Rispondi a questa email.
+    </p>
+  </div>
+
+  <p style="text-align:center;font-size:12px;color:#bbb;margin-top:24px;line-height:1.7">
+    NeuroDigest · Curato da Vincenzo Laterza, MD, Neurologo<br>
+    Gestisci il tuo abbonamento tramite il portale Stripe.
+  </p>
+</div>
+</body></html>
+""",
+            })
+
+            print(f"[stripe-webhook] ✓ welcome emails sent to {email}")
+
+        except Exception as e:
+            print(f"[stripe-webhook] email error: {e}")
 
     def _handle_subscription_change(self, subscription):
         """Revoke premium if subscription cancelled or payment failed."""
