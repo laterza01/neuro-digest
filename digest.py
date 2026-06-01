@@ -681,44 +681,8 @@ def _is_european(tz_str: str) -> bool:
 
 
 def filter_for_monday_send(subscribers: list[dict]) -> list[dict]:
-    """
-    Return subscribers eligible to receive the digest in this cron run.
-
-    Rules
-    ─────
-    European timezones  → it must be Monday AND local hour 13–15
-                          (targets 14:00 delivery; 3-hour window absorbs
-                          GitHub Actions timing jitter of up to ±1 h)
-    All other timezones → it must be Monday (any hour 0–23 local)
-
-    Timezone fallback: Europe/Rome for subscribers with no stored timezone
-    (signed up before the timezone column was added).
-
-    sends_log deduplication ensures each subscriber receives exactly one
-    copy per digest regardless of how many cron runs hit their window.
-    """
-    now = datetime.now(timezone.utc)
-    eligible: list[dict] = []
-    for sub in subscribers:
-        raw_tz = (sub.get("timezone") or "").strip() or "Europe/Rome"
-        try:
-            local_now = now.astimezone(ZoneInfo(raw_tz))
-        except (ZoneInfoNotFoundError, Exception):
-            local_now = now.astimezone(ZoneInfo("Europe/Rome"))
-            raw_tz = "Europe/Rome"
-
-        if local_now.weekday() != 0:   # not Monday locally → skip
-            continue
-
-        if _is_european(raw_tz):
-            # Target 14:00 — accept 13:00–15:59 to absorb GitHub jitter
-            if 13 <= local_now.hour <= 15:
-                eligible.append(sub)
-        else:
-            # Non-European: any time on their local Monday
-            eligible.append(sub)
-
-    return eligible
+    """Return all subscribers — time window removed, cron handles scheduling."""
+    return list(subscribers)
 
 
 # ── Deduplication helpers ─────────────────────────────────────────────────────
@@ -1563,8 +1527,7 @@ def run():
 
     now_utc  = datetime.now(timezone.utc).strftime("%H:%M UTC")
     eligible = filter_for_monday_send(all_subscribers)
-    print(f"  {len(eligible)} eligible this run (UTC: {now_utc})"
-          " — EU: Mon 13–15 local · Others: any Mon hour")
+    print(f"  {len(eligible)} eligible this run (UTC: {now_utc})")
     if not eligible:
         print("  No eligible subscribers this run — nothing to send.")
         return
