@@ -17,9 +17,11 @@ from digest import (
     generate_preferences_token, ensure_unsubscribe,
 )
 
-PREVIEW_TO = "vincenzolate95l@gmail.com"
-GH_REPO    = "laterza01/neuro-digest"
-GH_TOKEN   = os.getenv("GH_TOKEN", "")
+PREVIEW_TO     = "vincenzolate95l@gmail.com"
+GH_REPO        = "laterza01/neuro-digest"
+GH_TOKEN       = os.getenv("GH_TOKEN", "")
+APPROVE_SECRET = os.getenv("APPROVE_SECRET", "")
+SITE_URL_BASE  = os.getenv("SITE_URL", "https://neuro-digest-phi.vercel.app").rstrip("/")
 
 sb             = create_client(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_KEY", ""))
 resend_lib.api_key = os.getenv("RESEND_API_KEY", "")
@@ -46,13 +48,8 @@ digest_data = json.loads(row.get("digest_json") or "{}")
 print(f"  Using: {subject}")
 
 # ── Approve button HTML ───────────────────────────────────────────────────────
-approve_url = (
-    f"https://api.github.com/repos/{GH_REPO}/actions/workflows/digest.yml/dispatches"
-    if not GH_TOKEN
-    else f"https://github.com/{GH_REPO}/actions/workflows/digest.yml"
-)
+approve_url = f"{SITE_URL_BASE}/api/approve?token={APPROVE_SECRET}"
 
-# The approve button links to the GitHub Actions page — one click then "Run workflow"
 approve_html = f"""
 <table width="100%" cellpadding="0" cellspacing="0" border="0"
        style="background:#f0f7f0;border-top:3px solid #0e7c5a">
@@ -64,15 +61,15 @@ approve_html = f"""
     <p style="margin:0 0 16px;font-size:13px;color:#555;font-family:Helvetica,Arial,sans-serif">
       Controlla la newsletter qui sotto. Se è tutto ok, clicca il bottone per inviarla a tutti i subscriber.
     </p>
-    <a href="https://github.com/{GH_REPO}/actions/workflows/digest.yml"
+    <a href="{approve_url}"
        style="display:inline-block;background:#0e7c5a;color:#fff;
-              font-family:Helvetica,Arial,sans-serif;font-size:13px;
+              font-family:Helvetica,Arial,sans-serif;font-size:14px;
               font-weight:700;letter-spacing:.5px;text-decoration:none;
-              padding:12px 32px;border-radius:2px">
+              padding:14px 40px;border-radius:2px">
       ✅ &nbsp;APPROVA — Invia a tutti
     </a>
     <p style="margin:12px 0 0;font-size:11px;color:#999;font-family:Helvetica,Arial,sans-serif">
-      Clicca → GitHub si apre → "Run workflow" → conferma
+      Un solo click — nessun altro passaggio richiesto.
     </p>
   </td></tr>
 </table>
