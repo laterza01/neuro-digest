@@ -1,10 +1,13 @@
 name: Email Preview
 
 on:
+  schedule:
+    - cron: '0 11 * * 1'   # Every Monday 11:00 UTC = 13:00 Italian time
   push:
     branches: [main]
     paths:
-      - 'digest.py'   # only fires when the email template changes
+      - 'digest.py'         # Also fires on template changes
+  workflow_dispatch:
 
 jobs:
   send-preview:
@@ -31,4 +34,5 @@ jobs:
           RESEND_FROM:          ${{ secrets.RESEND_FROM }}
           JWT_SECRET:           ${{ secrets.JWT_SECRET }}
           SITE_URL:             ${{ secrets.SITE_URL }}
+          GH_TOKEN:             ${{ secrets.GH_TOKEN }}
         run: python preview_send.py

@@ -1,11 +1,7 @@
 name: NeuroDigest — Weekly Send
 
 on:
-  schedule:
-    # Fires once every Monday at 12:00 UTC = 14:00 Italian time (UTC+2 summer).
-    # sends_log deduplication ensures each subscriber gets exactly one email.
-    - cron: '0 12 * * 1'
-  workflow_dispatch:  # allows manual trigger from GitHub UI
+  workflow_dispatch:  # manual trigger only — fired by approve link in preview email
 
 jobs:
   send-digest:
