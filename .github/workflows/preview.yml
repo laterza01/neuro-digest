@@ -2,7 +2,7 @@ name: Email Preview
 
 on:
   schedule:
-    - cron: '0 11 * * 1'   # Every Monday 11:00 UTC = 13:00 Italian time
+    - cron: '0 18 * * 0'   # Every Sunday 18:00 UTC = 20:00 Italian time
   push:
     branches: [main]
     paths:
