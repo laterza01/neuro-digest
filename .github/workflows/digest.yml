@@ -1,7 +1,9 @@
 name: NeuroDigest — Weekly Send
 
 on:
-  workflow_dispatch:  # manual trigger only — fired by approve link in preview email
+  schedule:
+    - cron: '0 12 * * 1'   # Every Monday 12:00 UTC = 14:00 Italian time
+  workflow_dispatch:
 
 jobs:
   send-digest:

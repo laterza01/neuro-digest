@@ -1521,12 +1521,27 @@ def run():
         print("  No subscribers — nothing to send.")
         return
 
-    now_utc  = datetime.now(timezone.utc).strftime("%H:%M UTC")
-    eligible = filter_for_monday_send(all_subscribers)
-    print(f"  {len(eligible)} eligible this run (UTC: {now_utc})")
-    if not eligible:
-        print("  No eligible subscribers this run — nothing to send.")
-        return
+    eligible = list(all_subscribers)
+
+    # ── Check approval flag ───────────────────────────────────────────────────
+    if not is_last_monday_of_month():
+        try:
+            rows = (
+                sb.table("digests")
+                  .select("id,approved")
+                  .order("sent_at", desc=True)
+                  .limit(1)
+                  .execute()
+            )
+            if rows.data:
+                approved = rows.data[0].get("approved", False)
+                if not approved:
+                    print("  Newsletter not approved yet — waiting for APPROVE click.")
+                    print("  Nothing sent. Will retry next cron run.")
+                    return
+                print("  ✅ Approved — proceeding with send.")
+        except Exception as e:
+            print(f"  Warning: could not check approval flag: {e}. Proceeding anyway.")
 
     # ── LAST MONDAY → Guidelines Edition only, no weekly digest ──────────────
     if is_last_monday_of_month():
@@ -1601,6 +1616,12 @@ def run():
         eligible, digest_data, edition,
         sb=sb, digest_id=digest_id, already_sent=already_sent,
     )
+
+    # Reset approval flag after successful send
+    try:
+        sb.table("digests").update({"approved": False}).eq("id", digest_id).execute()
+    except Exception:
+        pass
 
     print(f"\nDone — Edition #{edition}")
 
