@@ -456,28 +456,26 @@ def build_html_email(digest: dict, edition: int,
     toc_items = ""
     for i, sec in enumerate(section_list):
         color = SECTION_PALETTE[i % len(SECTION_PALETTE)]
+        border = "border-bottom:1px solid #e8e8e4;" if i < len(section_list) - 1 else ""
         toc_items += (
-            f'<tr>'
-            f'<td style="padding:4px 12px 4px 0;vertical-align:top;width:1%;white-space:nowrap">'
-            f'<span style="font-size:9px;font-weight:700;letter-spacing:1.5px;'
-            f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif">'
-            f'{sec["topic"]}</span></td>'
-            f'<td style="padding:4px 0;vertical-align:top">'
-            f'<span style="font-size:12px;color:#555;font-family:Helvetica,Arial,sans-serif;'
-            f'line-height:1.5">{sec.get("headline","")}</span></td>'
-            f'</tr>'
+            f'<div style="padding:10px 0;{border}">'
+            f'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;'
+            f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif;'
+            f'margin-bottom:3px">{sec["topic"]}</div>'
+            f'<div style="font-size:13px;color:#333;font-family:Georgia,serif;'
+            f'line-height:1.5">{sec.get("headline","")}</div>'
+            f'</div>'
         )
 
     toc_html = ""
     if toc_items:
         toc_html = f"""
-    <tr><td class="toc" style="padding:20px 48px;background:#f5f5f3;
+    <tr><td class="toc" style="padding:20px 32px;background:#f5f5f3;
                                border-bottom:1px solid #e4e4e0">
-      <p style="margin:0 0 12px;font-size:9px;font-weight:700;letter-spacing:2.5px;
+      <p style="margin:0 0 10px;font-size:9px;font-weight:700;letter-spacing:2.5px;
                 text-transform:uppercase;color:#aaa;
                 font-family:Helvetica,Arial,sans-serif">In This Issue</p>
-      <table cellpadding="0" cellspacing="0" border="0" width="100%"
-             style="border-collapse:collapse">{toc_items}</table>
+      {toc_items}
     </td></tr>"""
 
     # ── "Also this week" teasers (only for topic-filtered subscribers) ────────
@@ -486,27 +484,25 @@ def build_html_email(digest: dict, edition: int,
         rows = ""
         for i, sec in enumerate(also_this_week):
             color = SECTION_PALETTE[(len(section_list) + i) % len(SECTION_PALETTE)]
+            border = "border-bottom:1px solid #e8e8e4;" if i < len(also_this_week) - 1 else ""
             rows += (
-                f'<tr>'
-                f'<td style="padding:7px 16px 7px 0;vertical-align:top;width:1%;white-space:nowrap">'
-                f'<span style="font-size:9px;font-weight:700;letter-spacing:1.5px;'
-                f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif">'
-                f'{sec["topic"]}</span></td>'
-                f'<td style="padding:7px 0;vertical-align:top">'
-                f'<span style="font-size:12px;color:#666;font-family:Helvetica,Arial,sans-serif;'
-                f'line-height:1.5">{sec.get("headline","")}</span></td>'
-                f'</tr>'
+                f'<div style="padding:10px 0;{border}">'
+                f'<div style="font-size:9px;font-weight:700;letter-spacing:1.5px;'
+                f'text-transform:uppercase;color:{color};font-family:Helvetica,Arial,sans-serif;'
+                f'margin-bottom:3px">{sec["topic"]}</div>'
+                f'<div style="font-size:13px;color:#555;font-family:Georgia,serif;'
+                f'line-height:1.5">{sec.get("headline","")}</div>'
+                f'</div>'
             )
         also_html = f"""
-    <tr><td class="ep" style="padding:28px 48px 0">
+    <tr><td class="ep" style="padding:28px 32px 0">
       <div style="border-top:1px solid #e8e8e4"></div>
     </td></tr>
-    <tr><td class="toc" style="padding:20px 48px 28px">
-      <p style="margin:0 0 12px;font-size:9px;font-weight:700;letter-spacing:2.5px;
+    <tr><td class="toc" style="padding:20px 32px 28px">
+      <p style="margin:0 0 10px;font-size:9px;font-weight:700;letter-spacing:2.5px;
                 text-transform:uppercase;color:#aaa;
                 font-family:Helvetica,Arial,sans-serif">Also This Week</p>
-      <table cellpadding="0" cellspacing="0" border="0" width="100%"
-             style="border-collapse:collapse">{rows}</table>
+      {rows}
     </td></tr>"""
 
     # ── Take-Home ─────────────────────────────────────────────────────────────
