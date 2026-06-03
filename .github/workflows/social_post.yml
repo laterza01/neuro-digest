@@ -1,0 +1,32 @@
+name: Social Post
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # Every day 12:00 UTC = 14:00 Italian time
+  workflow_dispatch:
+
+jobs:
+  social-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Post to Instagram + Facebook
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NOTION_TOKEN:         ${{ secrets.NOTION_TOKEN }}
+          FB_PAGE_TOKEN:        ${{ secrets.FB_PAGE_TOKEN }}
+          FB_PAGE_ID:           ${{ secrets.FB_PAGE_ID }}
+          IG_ACCOUNT_ID:        ${{ secrets.IG_ACCOUNT_ID }}
+        run: python social_post.py

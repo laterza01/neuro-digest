@@ -8,3 +8,4 @@ PyJWT>=2.8.0
 resend>=0.7.0
 tzdata>=2024.1
 stripe>=8.0.0
+playwright
