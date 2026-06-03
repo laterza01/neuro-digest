@@ -13,11 +13,11 @@ import os, json, sys, re, tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 import urllib.request
-import xml.etree.ElementTree as ET
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 
+import feedparser
 import anthropic
 from supabase import create_client
 import resend as resend_lib
@@ -43,15 +43,12 @@ PUBMED_RSS = (
 )
 
 def fetch_articles():
-    req = urllib.request.Request(PUBMED_RSS, headers={"User-Agent": "NeuroDigest/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        xml_data = r.read()
-    root = ET.fromstring(xml_data)
+    feed = feedparser.parse(PUBMED_RSS)
     articles = []
-    for item in root.findall(".//item"):
-        title = item.findtext("title", "").strip()
-        link  = item.findtext("link", "").strip()
-        desc  = item.findtext("description", "").strip()
+    for entry in feed.entries:
+        title = entry.get("title", "").strip()
+        link  = entry.get("link", "").strip()
+        desc  = entry.get("summary", entry.get("description", "")).strip()
         desc  = re.sub(r"<[^>]+>", "", desc)[:500]
         if title and link:
             articles.append({"title": title, "url": link, "abstract": desc})
