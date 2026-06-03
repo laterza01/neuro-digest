@@ -681,6 +681,94 @@ def filter_for_monday_send(subscribers: list[dict]) -> list[dict]:
     return list(subscribers)
 
 
+# ── Notion integration ────────────────────────────────────────────────────────
+
+def save_articles_to_notion(digest_data: dict) -> int:
+    """
+    Save synthesized articles to the Notion NeuroDigest Articles database.
+    Each article from each section is saved with topic, journal, summary, URL.
+    Returns number of articles saved.
+    """
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+    if not notion_token or not notion_db_id:
+        print("  Notion credentials not set — skipping.")
+        return 0
+
+    import urllib.request as _req
+    week_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    saved = 0
+
+    for section in digest_data.get("sections", []):
+        topic = section.get("topic", "Other")
+        for theme in section.get("themes", []):
+            for source in theme.get("sources", []):
+                title   = source.get("title", "").strip()
+                journal = source.get("journal", "").strip()
+                url     = source.get("url", "") or ""
+                doi     = source.get("doi", "")
+                if doi and not url:
+                    url = f"https://doi.org/{doi}"
+                summary = theme.get("body", "")[:2000]
+
+                if not title:
+                    continue
+
+                # Map topic to Notion select option
+                topic_map = {
+                    "multiple sclerosis": "Multiple Sclerosis",
+                    "stroke": "Stroke",
+                    "parkinson": "Parkinson's Disease",
+                    "epilepsy": "Epilepsy",
+                    "dementia": "Dementia",
+                    "headache": "Headache",
+                    "neuromuscular": "Neuromuscular",
+                    "neuro-oncology": "Neuro-Oncology",
+                    "neuroinflammation": "Neuroinflammation",
+                }
+                notion_topic = "Other"
+                for key, val in topic_map.items():
+                    if key in topic.lower():
+                        notion_topic = val
+                        break
+                if notion_topic == "Other":
+                    notion_topic = topic[:100]
+
+                page = {
+                    "parent": {"database_id": notion_db_id},
+                    "properties": {
+                        "Nome":      {"title": [{"text": {"content": title[:200]}}]},
+                        "Journal":   {"select": {"name": journal[:100] if journal else "Unknown"}},
+                        "Topic":     {"select": {"name": notion_topic}},
+                        "Summary":   {"rich_text": [{"text": {"content": summary}}]},
+                        "URL":       {"url": url if url else None},
+                        "Week":      {"date": {"start": week_str}},
+                        "Use for":   {"multi_select": [{"name": "Mail"}]},
+                        "Status":    {"select": {"name": "New"}},
+                    }
+                }
+                # Remove URL if empty (Notion doesn't accept null url)
+                if not url:
+                    del page["properties"]["URL"]
+
+                try:
+                    data = json.dumps(page).encode()
+                    request = _req.Request(
+                        "https://api.notion.com/v1/pages",
+                        data=data, method="POST"
+                    )
+                    request.add_header("Authorization", f"Bearer {notion_token}")
+                    request.add_header("Notion-Version", "2022-06-28")
+                    request.add_header("Content-Type", "application/json")
+                    with _req.urlopen(request) as r:
+                        if r.status == 200:
+                            saved += 1
+                except Exception as e:
+                    print(f"  Notion error for '{title[:50]}': {e}")
+
+    return saved
+
+
 # ── Deduplication helpers ─────────────────────────────────────────────────────
 
 def get_already_sent(sb, digest_id: int) -> set[str]:
@@ -1597,6 +1685,11 @@ def run():
         date_str  = datetime.now().strftime("%B %d, %Y")
         subject   = f"NeuroDigest — {date_str}"
         digest_id = save_digest_to_supabase(sb, subject, html, plain, edition, digest_data)
+
+        # Save articles to Notion
+        print("\nSaving articles to Notion...")
+        saved = save_articles_to_notion(digest_data)
+        print(f"  {saved} articles saved to Notion")
         if digest_id:
             print(f"  Digest persisted to Supabase (id={digest_id})")
         else:
