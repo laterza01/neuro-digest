@@ -160,12 +160,23 @@ Return ONLY valid JSON with this exact structure:
     return json.loads(text.strip())
 
 # ── 3. Build slide HTML ───────────────────────────────────────────────────────
-def dots_html(current: int, total: int, light: bool = False) -> str:
-    # No navigation dots in static PNG slides
-    return ""
+def dots_html(current: int, total: int, light: bool = False, show: bool = True) -> str:
+    if not show:
+        return ""
+    base = "rgba(255,255,255,.2)" if light else "#ddd"
+    on   = "#c0392b"
+    return (
+        '<div style="display:flex;gap:10px;margin-top:48px">'
+        + "".join(
+            f'<div style="width:12px;height:12px;border-radius:50%;'
+            f'background:{on if i == current else base}"></div>'
+            for i in range(total)
+        )
+        + "</div>"
+    )
 
-def build_slide_html(slide: dict, idx: int, total: int) -> str:
-    d = dots_html(idx, total, light=(slide["type"] in ("cover", "stat", "cta")))
+def build_slide_html(slide: dict, idx: int, total: int, show_dots: bool = True) -> str:
+    d = dots_html(idx, total, light=(slide["type"] in ("cover", "stat", "cta")), show=show_dots)
 
     if slide["type"] == "cover":
         return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -256,20 +267,30 @@ body{{width:1080px;height:1080px;background:#c0392b;display:flex;flex-direction:
     return ""
 
 # ── 4. Render PNG ─────────────────────────────────────────────────────────────
-def render_slides(slides: list[dict], out_dir: Path) -> list[Path]:
+def render_slides(slides: list[dict], out_dir: Path) -> tuple[list[Path], Path]:
+    """Returns (ig_slide_paths, fb_cover_path)"""
     paths = []
     total = len(slides)
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page    = browser.new_page(viewport={"width": 1080, "height": 1080})
+
+        # Instagram slides — WITH dots
         for i, slide in enumerate(slides):
-            page.set_content(build_slide_html(slide, i, total), wait_until="networkidle")
+            page.set_content(build_slide_html(slide, i, total, show_dots=True), wait_until="networkidle")
             path = out_dir / f"slide_{i+1:02d}.png"
             page.screenshot(path=str(path), full_page=False)
             paths.append(path)
             print(f"  Slide {i+1}/{total} rendered")
+
+        # Facebook cover — first slide WITHOUT dots
+        page.set_content(build_slide_html(slides[0], 0, total, show_dots=False), wait_until="networkidle")
+        fb_cover = out_dir / "fb_cover.png"
+        page.screenshot(path=str(fb_cover), full_page=False)
+        print(f"  FB cover rendered (no dots)")
+
         browser.close()
-    return paths
+    return paths, fb_cover
 
 # ── 5. Upload to Supabase Storage ────────────────────────────────────────────
 def upload_images(paths: list[Path], post_id: str) -> list[str]:
@@ -441,7 +462,7 @@ if __name__ == "__main__":
         tmp_path = Path(tmp)
 
         print("\n[3/6] Rendering slides to PNG...")
-        slide_paths = render_slides(content["slides"], tmp_path)
+        slide_paths, fb_cover_path = render_slides(content["slides"], tmp_path)
 
         print("\n[4/6] Saving post to Supabase...")
         row = sb.table("social_posts").insert({
@@ -456,9 +477,14 @@ if __name__ == "__main__":
         print(f"      Post ID: {post_id}")
 
         print("\n[5/6] Uploading images to Supabase Storage...")
-        slide_urls = upload_images(slide_paths, post_id)
-        sb.table("social_posts").update({"slide_urls": slide_urls}).eq("id", post_id).execute()
-        print(f"      {len(slide_urls)} images uploaded")
+        slide_urls  = upload_images(slide_paths, post_id)
+        # Upload FB cover separately
+        fb_cover_url = upload_images([fb_cover_path], post_id)[0]
+        sb.table("social_posts").update({
+            "slide_urls":   slide_urls,
+            "fb_cover_url": fb_cover_url,
+        }).eq("id", post_id).execute()
+        print(f"      {len(slide_urls)} IG slides + 1 FB cover uploaded")
 
     print("\n[5b] Updating Notion article...")
     try:

@@ -180,7 +180,9 @@ if __name__ == "__main__":
     if not fb_post_id:
         try:
             print("\n[2/2] Posting to Facebook...")
-            fb_post_id = post_facebook(slide_urls[0], fb_text, post["article_url"], post.get("journal", ""))
+            # Use dedicated FB cover (no dots) if available, else first slide
+            fb_cover = post.get("fb_cover_url") or slide_urls[0]
+            fb_post_id = post_facebook(fb_cover, fb_text, post["article_url"], post.get("journal", ""))
             print(f"  ✓ Facebook post ID: {fb_post_id}")
         except Exception as e:
             print(f"  ✗ Facebook error: {e}")
