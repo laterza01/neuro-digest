@@ -318,72 +318,100 @@ def update_notion_article(notion_id: str) -> None:
     with urllib.request.urlopen(req) as r:
         r.read()
 
-# ── 7. Send preview email ─────────────────────────────────────────────────────
+# ── 7. Send two preview emails (Instagram + Facebook) ────────────────────────
 def send_preview(content: dict, slide_urls: list[str], post_id: str):
-    approve_url = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}"
-    today_str   = datetime.now().strftime("%A, %d %B %Y")
+    today_str  = datetime.now().strftime("%A, %d %B %Y")
+    title_short = content['article_title'][:55]
 
+    ig_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig"
+    fb_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb"
+
+    fb_full = (
+        f"{content['fb_text']}\n"
+        f"📋 {content.get('journal','')}\n"
+        f"{content['article_url']}\n"
+        f"🔗 Newsletter: https://www.neuro-digest.com"
+    )
+
+    # ── Email 1: Instagram carousel ───────────────────────────────────────────
     slides_html = "\n".join(
         f'<img src="{url}" width="480" style="display:block;margin:0 auto 8px;'
         f'border-radius:8px;max-width:100%">'
         for url in slide_urls
     )
-
-    html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
+    html_ig = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:24px;background:#f4f3f0;font-family:Helvetica,Arial,sans-serif">
 <div style="max-width:600px;margin:0 auto">
-
   <table width="100%" cellpadding="0" cellspacing="0" border="0"
-         style="background:#f0f7f0;border-top:3px solid #0e7c5a;border-radius:8px;margin-bottom:20px">
+         style="background:#f0f7f0;border-top:3px solid #E1306C;border-radius:8px;margin-bottom:20px">
     <tr><td style="padding:24px;text-align:center">
       <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:2px;
-                text-transform:uppercase;color:#0e7c5a">Social Preview · {today_str}</p>
-      <p style="margin:0 0 16px;font-size:13px;color:#555">
-        Review the carousel below. Approve to post today at 14:00.
-      </p>
-      <a href="{approve_url}"
-         style="display:inline-block;background:#0e7c5a;color:#fff;font-size:14px;
+                text-transform:uppercase;color:#E1306C">Instagram · {today_str}</p>
+      <p style="margin:0 0 16px;font-size:13px;color:#555">{len(slide_urls)} slides · 1080×1080px</p>
+      <a href="{ig_approve}"
+         style="display:inline-block;background:#E1306C;color:#fff;font-size:14px;
                 font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px">
-        ✅ &nbsp;APPROVE — Post at 14:00
+        ✅ &nbsp;APPROVE — Post on Instagram at 14:00
       </a>
     </td></tr>
   </table>
-
   <div style="background:#fff;padding:20px 24px;margin-bottom:16px;border-radius:8px">
     <p style="font-size:11px;color:#888;letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px">Article</p>
-    <p style="font-size:15px;color:#1a1a2e;font-weight:700;margin:0 0 6px">{content['article_title']}</p>
+    <p style="font-size:15px;color:#1a1a2e;font-weight:700;margin:0 0 4px">{content['article_title']}</p>
     <a href="{content['article_url']}" style="font-size:12px;color:#c0392b">{content['article_url']}</a>
   </div>
-
-  <div style="background:#fff;padding:20px 24px;margin-bottom:16px;border-radius:8px">
+  <div style="background:#fff;padding:20px 24px;border-radius:8px">
     <p style="font-size:11px;color:#888;letter-spacing:.1em;text-transform:uppercase;margin:0 0 16px">
-      Instagram Carousel — {len(slide_urls)} slides</p>
+      Carousel Slides</p>
     {slides_html}
   </div>
-
-  <div style="background:#fff;padding:20px 24px;border-radius:8px">
-    <p style="font-size:11px;color:#888;letter-spacing:.1em;text-transform:uppercase;margin:0 0 12px">
-      Facebook Post</p>
-    <p style="font-size:15px;color:#333;line-height:1.7">{content['fb_text']}</p>
-  </div>
-
 </div></body></html>"""
 
     resend_lib.Emails.send({
         "from":    from_addr,
         "to":      PREVIEW_TO,
-        "subject": f"[Social Preview] {content['article_title'][:60]}",
-        "html":    html,
-        "text":    (
-            f"Social Preview — {today_str}\n\n"
-            f"Article: {content['article_title']}\n"
-            f"URL: {content['article_url']}\n\n"
-            f"Facebook:\n{content['fb_text']}\n\n"
-            f"Approve: {approve_url}"
-        ),
+        "subject": f"[Instagram Preview] {title_short}",
+        "html":    html_ig,
+        "text":    f"Instagram Preview\n{content['article_title']}\nApprove: {ig_approve}",
     })
-    print(f"✓ Preview sent to {PREVIEW_TO}")
+    print(f"✓ Instagram preview sent")
+
+    # ── Email 2: Facebook post ────────────────────────────────────────────────
+    html_fb = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#f4f3f0;font-family:Helvetica,Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background:#e8f0fe;border-top:3px solid #1877f2;border-radius:8px;margin-bottom:20px">
+    <tr><td style="padding:24px;text-align:center">
+      <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:2px;
+                text-transform:uppercase;color:#1877f2">Facebook · {today_str}</p>
+      <p style="margin:0 0 16px;font-size:13px;color:#555">Cover image + post text</p>
+      <a href="{fb_approve}"
+         style="display:inline-block;background:#1877f2;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px">
+        ✅ &nbsp;APPROVE — Post on Facebook at 14:00
+      </a>
+    </td></tr>
+  </table>
+  <div style="background:#fff;padding:20px 24px;margin-bottom:16px;border-radius:8px">
+    <p style="font-size:11px;color:#888;letter-spacing:.1em;text-transform:uppercase;margin:0 0 12px">Cover Image</p>
+    <img src="{slide_urls[0]}" width="480" style="display:block;margin:0 auto;border-radius:8px;max-width:100%">
+  </div>
+  <div style="background:#fff;padding:20px 24px;border-radius:8px">
+    <p style="font-size:11px;color:#888;letter-spacing:.1em;text-transform:uppercase;margin:0 0 12px">Post Text</p>
+    <div style="background:#f5f6f7;border-radius:8px;padding:20px;white-space:pre-wrap;
+                font-size:15px;color:#1c1e21;line-height:1.7">{fb_full}</div>
+  </div>
+</div></body></html>"""
+
+    resend_lib.Emails.send({
+        "from":    from_addr,
+        "to":      PREVIEW_TO,
+        "subject": f"[Facebook Preview] {title_short}",
+        "html":    html_fb,
+        "text":    f"Facebook Preview\n\n{fb_full}\n\nApprove: {fb_approve}",
+    })
+    print(f"✓ Facebook preview sent")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
