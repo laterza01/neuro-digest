@@ -17,7 +17,6 @@ import urllib.request
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 
-import feedparser
 import anthropic
 from supabase import create_client
 import resend as resend_lib
@@ -33,26 +32,64 @@ resend_lib.api_key = os.getenv("RESEND_API_KEY", "")
 from_addr = os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>")
 ai = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 
-# ── 1. Fetch PubMed RSS ───────────────────────────────────────────────────────
-PUBMED_RSS = (
-    "https://pubmed.ncbi.nlm.nih.gov/rss/search/"
-    "?term=(neurology[MeSH]+OR+stroke[MeSH]+OR+multiple+sclerosis[MeSH]"
-    "+OR+epilepsy[MeSH]+OR+Parkinson+disease[MeSH]+OR+dementia[MeSH])"
+# ── 1. Fetch PubMed via E-utilities ──────────────────────────────────────────
+ESEARCH_URL = (
+    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+    "?db=pubmed"
+    "&term=(neurology[MeSH]+OR+stroke[MeSH]+OR+multiple+sclerosis[MeSH]"
+    "+OR+epilepsy[MeSH]+OR+Parkinson+disease[MeSH]+OR+dementia[MeSH]"
+    "+OR+neurological+disorders[MeSH])"
     "+AND+(clinical+trial[pt]+OR+review[pt]+OR+guideline[pt]+OR+meta-analysis[pt])"
-    "&limit=25&format=rss"
+    "&retmax=25&sort=date&retmode=json&datetype=pdat&reldate=14"
 )
+ESUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id={ids}"
+EFETCH_URL   = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=text&rettype=abstract&id={ids}"
 
-def fetch_articles():
-    feed = feedparser.parse(PUBMED_RSS)
+def fetch_articles() -> list[dict]:
+    # Step 1: get IDs
+    with urllib.request.urlopen(ESEARCH_URL, timeout=30) as r:
+        data = json.loads(r.read())
+    ids = data["esearchresult"]["idlist"]
+    if not ids:
+        return []
+
+    # Step 2: get summaries (title + journal)
+    ids_str = ",".join(ids[:20])
+    with urllib.request.urlopen(ESUMMARY_URL.format(ids=ids_str), timeout=30) as r:
+        summary = json.loads(r.read())
+
+    # Step 3: get abstracts as plain text
+    abstracts = {}
+    try:
+        with urllib.request.urlopen(EFETCH_URL.format(ids=ids_str), timeout=30) as r:
+            text = r.read().decode("utf-8", errors="ignore")
+        # Split by PMID blocks
+        for block in text.split("\n\n\n"):
+            for uid in ids:
+                if f"PMID- {uid}" in block or f"PMID: {uid}" in block:
+                    # Extract AB (abstract) lines
+                    lines = [l[6:].strip() for l in block.splitlines() if l.startswith("AB  -")]
+                    if lines:
+                        abstracts[uid] = " ".join(lines)[:500]
+    except Exception:
+        pass  # abstracts optional
+
     articles = []
-    for entry in feed.entries:
-        title = entry.get("title", "").strip()
-        link  = entry.get("link", "").strip()
-        desc  = entry.get("summary", entry.get("description", "")).strip()
-        desc  = re.sub(r"<[^>]+>", "", desc)[:500]
-        if title and link:
-            articles.append({"title": title, "url": link, "abstract": desc})
-    return articles[:25]
+    for uid in ids[:20]:
+        if uid not in summary["result"]:
+            continue
+        art     = summary["result"][uid]
+        title   = art.get("title", "").strip().rstrip(".")
+        journal = art.get("source", "PubMed")
+        abstract = abstracts.get(uid, art.get("title", ""))
+        if title:
+            articles.append({
+                "title":    title,
+                "url":      f"https://pubmed.ncbi.nlm.nih.gov/{uid}/",
+                "journal":  journal,
+                "abstract": abstract,
+            })
+    return articles
 
 # ── 2. Claude: pick best + generate carousel ──────────────────────────────────
 def generate_content(articles: list[dict]) -> dict:
