@@ -192,22 +192,33 @@ if __name__ == "__main__":
         "fb_post_id": fb_post_id,
     }).eq("id", post_id).execute()
 
-    # Update Notion status → Used
+    # Update Notion: status=Used, use_for keeps existing values + ensures "Social"
     if post.get("notion_page_id"):
         notion_token = os.getenv("NOTION_TOKEN", "")
-        payload = {"properties": {"Status": {"select": {"name": "Used"}}}}
+        # First fetch current use_for values
+        get_req = urllib.request.Request(
+            f"https://api.notion.com/v1/pages/{post['notion_page_id']}",
+            headers={"Authorization": f"Bearer {notion_token}",
+                     "Notion-Version": "2022-06-28"}
+        )
+        with urllib.request.urlopen(get_req) as r:
+            page_data = json.loads(r.read())
+        current_use = [o["name"] for o in page_data["properties"].get("Use for", {}).get("multi_select", [])]
+        if "Social" not in current_use:
+            current_use.append("Social")
+        payload = {"properties": {
+            "Status":  {"select": {"name": "Used"}},
+            "Use for": {"multi_select": [{"name": v} for v in current_use]},
+        }}
         req = urllib.request.Request(
             f"https://api.notion.com/v1/pages/{post['notion_page_id']}",
-            data=json.dumps(payload).encode(),
-            method="PATCH",
-            headers={
-                "Authorization":  f"Bearer {notion_token}",
-                "Notion-Version": "2022-06-28",
-                "Content-Type":   "application/json",
-            }
+            data=json.dumps(payload).encode(), method="PATCH",
+            headers={"Authorization": f"Bearer {notion_token}",
+                     "Notion-Version": "2022-06-28",
+                     "Content-Type":   "application/json"}
         )
         with urllib.request.urlopen(req) as r:
             pass
-        print("\n✓ Notion article marked as Used")
+        print(f"\n✓ Notion: status=Used, use_for={current_use}")
 
     print("\n✓ Done!")

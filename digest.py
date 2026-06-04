@@ -1713,7 +1713,66 @@ def run():
     except Exception:
         pass
 
+    # Mark newsletter articles as Used (use_for=Mail) in Notion
+    _mark_notion_articles_used_mail(digest_data)
+
     print(f"\nDone — Edition #{edition}")
+
+
+def _mark_notion_articles_used_mail(digest_data: dict) -> None:
+    """After newsletter send: mark all articles as Used + use_for includes Mail."""
+    import urllib.request, json as _json
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+    if not notion_token or not notion_db_id:
+        return
+
+    # Collect all article URLs from the digest
+    urls = set()
+    for section in digest_data.get("sections", []):
+        for theme in section.get("themes", []):
+            for article in theme.get("articles", []):
+                if article.get("url"):
+                    urls.add(article["url"])
+
+    if not urls:
+        return
+
+    # Query Notion for matching articles
+    for url in urls:
+        try:
+            query = {"filter": {"property": "URL", "url": {"equals": url}}}
+            req = urllib.request.Request(
+                f"https://api.notion.com/v1/databases/{notion_db_id}/query",
+                data=_json.dumps(query).encode(),
+                headers={"Authorization": f"Bearer {notion_token}",
+                         "Notion-Version": "2022-06-28",
+                         "Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req) as r:
+                results = _json.loads(r.read()).get("results", [])
+
+            for page in results:
+                current_use = [o["name"] for o in page["properties"].get("Use for", {}).get("multi_select", [])]
+                if "Mail" not in current_use:
+                    current_use.append("Mail")
+                payload = {"properties": {
+                    "Status":  {"select": {"name": "Used"}},
+                    "Use for": {"multi_select": [{"name": v} for v in current_use]},
+                }}
+                patch = urllib.request.Request(
+                    f"https://api.notion.com/v1/pages/{page['id']}",
+                    data=_json.dumps(payload).encode(), method="PATCH",
+                    headers={"Authorization": f"Bearer {notion_token}",
+                             "Notion-Version": "2022-06-28",
+                             "Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(patch) as r:
+                    r.read()
+        except Exception as e:
+            print(f"  Notion mark-used warning ({url[:50]}): {e}")
+
+    print(f"  Notion: {len(urls)} newsletter articles marked Used (Mail)")
 
 
 if __name__ == "__main__":
