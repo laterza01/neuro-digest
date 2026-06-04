@@ -159,25 +159,31 @@ if __name__ == "__main__":
         "fb_text":       fb_text,
     }
 
-    ig_post_id = None
-    fb_post_id = None
+    ig_post_id = post.get("ig_post_id")
+    fb_post_id = post.get("fb_post_id")
 
-    # Post to Instagram
-    try:
-        print("\n[1/2] Posting to Instagram...")
-        caption    = build_caption(content)
-        ig_post_id = post_instagram_carousel(slide_urls, caption)
-        print(f"  ✓ Instagram post ID: {ig_post_id}")
-    except Exception as e:
-        print(f"  ✗ Instagram error: {e}")
+    # Post to Instagram (skip if already done)
+    if not ig_post_id:
+        try:
+            print("\n[1/2] Posting to Instagram...")
+            caption    = build_caption(content)
+            ig_post_id = post_instagram_carousel(slide_urls, caption)
+            print(f"  ✓ Instagram post ID: {ig_post_id}")
+        except Exception as e:
+            print(f"  ✗ Instagram error: {e}")
+    else:
+        print(f"\n[1/2] Instagram already posted ({ig_post_id}) — skipping")
 
-    # Post to Facebook (use cover image = first slide)
-    try:
-        print("\n[2/2] Posting to Facebook...")
-        fb_post_id = post_facebook(slide_urls[0], fb_text, post["article_url"], post.get("journal", ""))
-        print(f"  ✓ Facebook post ID: {fb_post_id}")
-    except Exception as e:
-        print(f"  ✗ Facebook error: {e}")
+    # Post to Facebook (skip if already done)
+    if not fb_post_id:
+        try:
+            print("\n[2/2] Posting to Facebook...")
+            fb_post_id = post_facebook(slide_urls[0], fb_text, post["article_url"], post.get("journal", ""))
+            print(f"  ✓ Facebook post ID: {fb_post_id}")
+        except Exception as e:
+            print(f"  ✗ Facebook error: {e}")
+    else:
+        print(f"\n[2/2] Facebook already posted ({fb_post_id}) — skipping")
 
     # Update Supabase
     sb.table("social_posts").update({
