@@ -119,9 +119,9 @@ def post_facebook(cover_url: str, text: str, article_url: str, journal: str = ""
     return result.get("post_id", result.get("id", ""))
 
 # ── Build Instagram caption ───────────────────────────────────────────────────
-def build_caption(content: dict) -> str:
-    # Each sentence already on its own line; add blank line before hashtags
-    text = content['fb_text'].strip()
+def build_caption(post: dict) -> str:
+    # Instagram: use ig_text (one sentence per line), fallback to fb_text
+    text = (post.get("ig_text") or post.get("fb_text", "")).strip()
     return (
         f"{text}\n\n"
         f"#neurology #neurodigest #neurologia #neuroscience #medicaleducation"
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     if not ig_post_id:
         try:
             print("\n[1/2] Posting to Instagram...")
-            caption    = build_caption(content)
+            caption    = build_caption(post)
             ig_post_id = post_instagram_carousel(slide_urls, caption)
             print(f"  ✓ Instagram post ID: {ig_post_id}")
         except Exception as e:

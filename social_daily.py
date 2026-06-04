@@ -144,7 +144,8 @@ Return ONLY valid JSON with this exact structure:
     {{"type": "source",  "journal": "journal name",     "year": "2025 or 2026", "url": "short URL"}},
     {{"type": "cta"}}
   ],
-  "fb_text": "3-4 short punchy sentences about the clinical finding and its implication. Put EACH sentence on its own line (use \\n between sentences). Direct, no fluff. English. Do NOT include URLs, journal name, hashtags, or 'Follow NeuroDigest' — these are added automatically."
+  "fb_text": "3-4 sentences about the clinical finding and its implication, written as a single flowing paragraph (no line breaks). Direct, informative, English. Do NOT include URLs, journal name, hashtags, or 'Follow NeuroDigest' — these are added automatically.",
+  "ig_text": "Same content as fb_text but with EACH sentence on its own line (use \\n between sentences). Do NOT include URLs or hashtags."
 }}"""
 
     msg = ai.messages.create(
@@ -421,6 +422,7 @@ if __name__ == "__main__":
             "article_url":   content["article_url"],
             "journal":       content.get("journal", ""),
             "fb_text":       content["fb_text"],
+            "ig_text":       content.get("ig_text", content["fb_text"]),
             "approved":      False,
         }).execute()
         post_id = row.data[0]["id"]
