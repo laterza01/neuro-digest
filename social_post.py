@@ -85,12 +85,21 @@ def post_instagram_carousel(slide_urls: list[str], caption: str) -> str:
     return result["id"]
 
 # ── Facebook post ─────────────────────────────────────────────────────────────
-def post_facebook(cover_url: str, text: str) -> str:
+def build_fb_message(text: str, article_url: str) -> str:
+    return (
+        f"{text}\n\n"
+        f"📖 Read the full article: {article_url}\n\n"
+        f"🧠 Subscribe to our free weekly neurology newsletter:\n"
+        f"www.neuro-digest.com"
+    )
+
+def post_facebook(cover_url: str, text: str, article_url: str) -> str:
     """Post to Facebook Page with cover image."""
     print("  Posting to Facebook...")
+    message = build_fb_message(text, article_url)
     result = graph_post(f"{FB_PAGE_ID}/photos", {
         "url":          cover_url,
-        "message":      text,
+        "message":      message,
         "access_token": FB_PAGE_TOKEN,
     })
     return result.get("post_id", result.get("id", ""))
@@ -151,7 +160,7 @@ if __name__ == "__main__":
     # Post to Facebook (use cover image = first slide)
     try:
         print("\n[2/2] Posting to Facebook...")
-        fb_post_id = post_facebook(slide_urls[0], fb_text)
+        fb_post_id = post_facebook(slide_urls[0], fb_text, post["article_url"])
         print(f"  ✓ Facebook post ID: {fb_post_id}")
     except Exception as e:
         print(f"  ✗ Facebook error: {e}")
