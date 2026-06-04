@@ -101,7 +101,7 @@ def post_instagram_carousel(slide_urls: list[str], caption: str) -> str:
 def build_fb_message(text: str, article_url: str, journal: str = "") -> str:
     journal_line = f"📋 {journal}" if journal else "📋 PubMed"
     return (
-        f"{text}\n"
+        f"{text.strip()}\n\n"
         f"{journal_line}\n"
         f"{article_url}\n"
         f"🔗 Newsletter: https://www.neuro-digest.com"
@@ -120,9 +120,10 @@ def post_facebook(cover_url: str, text: str, article_url: str, journal: str = ""
 
 # ── Build Instagram caption ───────────────────────────────────────────────────
 def build_caption(content: dict) -> str:
+    # Each sentence already on its own line; add blank line before hashtags
+    text = content['fb_text'].strip()
     return (
-        f"{content['article_title']}\n\n"
-        f"{content['fb_text']}\n\n"
+        f"{text}\n\n"
         f"#neurology #neurodigest #neurologia #neuroscience #medicaleducation"
     )
 
