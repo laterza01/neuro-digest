@@ -1686,10 +1686,7 @@ def run():
         subject   = f"NeuroDigest — {date_str}"
         digest_id = save_digest_to_supabase(sb, subject, html, plain, edition, digest_data)
 
-        # Save articles to Notion
-        print("\nSaving articles to Notion...")
-        saved = save_articles_to_notion(digest_data)
-        print(f"  {saved} articles saved to Notion")
+        # Articles saved to Notion on Sunday via preview_send.py
         if digest_id:
             print(f"  Digest persisted to Supabase (id={digest_id})")
         else:

@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from digest import (
     build_html_email, build_plain_text,
     generate_preferences_token, ensure_unsubscribe,
+    save_articles_to_notion,
 )
 
 PREVIEW_TO     = "vincenzolate95l@gmail.com"
@@ -46,6 +47,14 @@ edition     = row.get("edition_num") or 0
 subject     = row.get("subject", f"NeuroDigest #{edition}")
 digest_data = json.loads(row.get("digest_json") or "{}")
 print(f"  Using: {subject}")
+
+# ── Save articles to Notion (Sunday, before Monday send) ─────────────────────
+print("Saving articles to Notion...")
+try:
+    saved = save_articles_to_notion(digest_data)
+    print(f"  {saved} articles saved to Notion")
+except Exception as e:
+    print(f"  Notion warning: {e}")
 
 # ── Approve button HTML ───────────────────────────────────────────────────────
 approve_url = f"{SITE_URL_BASE}/api/approve?token={APPROVE_SECRET}"
