@@ -32,62 +32,87 @@ resend_lib.api_key = os.getenv("RESEND_API_KEY", "")
 from_addr = os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>")
 ai = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 
-# ── 1. Fetch PubMed via E-utilities ──────────────────────────────────────────
+# ── 1a. Fetch from PubMed E-utilities (fallback) ─────────────────────────────
 ESEARCH_URL = (
     "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     "?db=pubmed"
     "&term=(neurology[MeSH]+OR+stroke[MeSH]+OR+multiple+sclerosis[MeSH]"
-    "+OR+epilepsy[MeSH]+OR+Parkinson+disease[MeSH]+OR+dementia[MeSH]"
-    "+OR+neurological+disorders[MeSH])"
+    "+OR+epilepsy[MeSH]+OR+Parkinson+disease[MeSH]+OR+dementia[MeSH])"
     "+AND+(clinical+trial[pt]+OR+review[pt]+OR+guideline[pt]+OR+meta-analysis[pt])"
-    "&retmax=25&sort=date&retmode=json&datetype=pdat&reldate=14"
+    "&retmax=20&sort=date&retmode=json&datetype=pdat&reldate=14"
 )
-ESUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id={ids}"
-EFETCH_URL   = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=text&rettype=abstract&id={ids}"
 
-def fetch_articles() -> list[dict]:
-    # Step 1: get IDs
+def fetch_pubmed_articles() -> list[dict]:
     with urllib.request.urlopen(ESEARCH_URL, timeout=30) as r:
         data = json.loads(r.read())
     ids = data["esearchresult"]["idlist"]
     if not ids:
         return []
-
-    # Step 2: get summaries (title + journal)
-    ids_str = ",".join(ids[:20])
-    with urllib.request.urlopen(ESUMMARY_URL.format(ids=ids_str), timeout=30) as r:
+    ids_str = ",".join(ids[:15])
+    summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id={ids_str}"
+    with urllib.request.urlopen(summary_url, timeout=30) as r:
         summary = json.loads(r.read())
-
-    # Step 3: get abstracts as plain text
-    abstracts = {}
-    try:
-        with urllib.request.urlopen(EFETCH_URL.format(ids=ids_str), timeout=30) as r:
-            text = r.read().decode("utf-8", errors="ignore")
-        # Split by PMID blocks
-        for block in text.split("\n\n\n"):
-            for uid in ids:
-                if f"PMID- {uid}" in block or f"PMID: {uid}" in block:
-                    # Extract AB (abstract) lines
-                    lines = [l[6:].strip() for l in block.splitlines() if l.startswith("AB  -")]
-                    if lines:
-                        abstracts[uid] = " ".join(lines)[:500]
-    except Exception:
-        pass  # abstracts optional
-
     articles = []
-    for uid in ids[:20]:
+    for uid in ids[:15]:
         if uid not in summary["result"]:
             continue
-        art     = summary["result"][uid]
-        title   = art.get("title", "").strip().rstrip(".")
-        journal = art.get("source", "PubMed")
-        abstract = abstracts.get(uid, art.get("title", ""))
+        art = summary["result"][uid]
+        title = art.get("title", "").strip().rstrip(".")
         if title:
             articles.append({
                 "title":    title,
                 "url":      f"https://pubmed.ncbi.nlm.nih.gov/{uid}/",
-                "journal":  journal,
-                "abstract": abstract,
+                "journal":  art.get("source", "PubMed"),
+                "abstract": title,
+                "notion_id": "",
+            })
+    return articles
+
+# ── 1b. Fetch articles from Notion (primary source) ───────────────────────────
+def fetch_articles() -> list[dict]:
+    """Read New articles from Notion not yet used for Social."""
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+
+    payload = {
+        "filter": {
+            "and": [
+                {"property": "Status", "select": {"equals": "New"}},
+            ]
+        },
+        "sorts": [{"property": "Published", "direction": "descending"}],
+        "page_size": 20,
+    }
+    req = urllib.request.Request(
+        f"https://api.notion.com/v1/databases/{notion_db_id}/query",
+        data=json.dumps(payload).encode(),
+        headers={
+            "Authorization":  f"Bearer {notion_token}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type":   "application/json",
+        }
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.loads(r.read())
+
+    articles = []
+    for page in data.get("results", []):
+        props = page["properties"]
+        title   = "".join(t["plain_text"] for t in props.get("Nome", {}).get("title", []))
+        url     = props.get("URL", {}).get("url") or ""
+        journal = (props.get("Journal", {}).get("select") or {}).get("name", "")
+        summary = "".join(t["plain_text"] for t in props.get("Summary", {}).get("rich_text", []))
+        # Skip if already used for Social
+        use_for = [o["name"] for o in props.get("Use for", {}).get("multi_select", [])]
+        if "Social" in use_for:
+            continue
+        if title:
+            articles.append({
+                "title":        title,
+                "url":          url,
+                "journal":      journal,
+                "abstract":     summary[:500] if summary else title,
+                "notion_id":    page["id"],
             })
     return articles
 
@@ -270,25 +295,20 @@ def upload_images(paths: list[Path], post_id: str) -> list[str]:
         urls.append(public_url)
     return urls
 
-# ── 6. Save to Notion ─────────────────────────────────────────────────────────
-def save_to_notion(content: dict) -> str:
+# ── 6. Update Notion article → mark as Scheduled for Social ──────────────────
+def update_notion_article(notion_id: str) -> None:
+    """Mark existing Notion article as Scheduled + add Social to Use for."""
     notion_token = os.getenv("NOTION_TOKEN", "")
-    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
-    today = datetime.now(timezone.utc).date().isoformat()
     payload = {
-        "parent": {"database_id": notion_db_id},
         "properties": {
-            "Nome":      {"title": [{"text": {"content": content["article_title"][:200]}}]},
-            "URL":       {"url": content["article_url"]},
-            "Journal":   {"select": {"name": content.get("journal", "PubMed")[:100]}},
-            "Status":    {"select": {"name": "Scheduled"}},
-            "Use for":   {"multi_select": [{"name": "Social"}]},
-            "Published": {"date": {"start": today}},
+            "Status":  {"select": {"name": "Scheduled"}},
+            "Use for": {"multi_select": [{"name": "Mail"}, {"name": "Social"}]},
         }
     }
     req = urllib.request.Request(
-        "https://api.notion.com/v1/pages",
+        f"https://api.notion.com/v1/pages/{notion_id}",
         data=json.dumps(payload).encode(),
+        method="PATCH",
         headers={
             "Authorization":  f"Bearer {notion_token}",
             "Notion-Version": "2022-06-28",
@@ -296,7 +316,7 @@ def save_to_notion(content: dict) -> str:
         }
     )
     with urllib.request.urlopen(req) as r:
-        return json.loads(r.read())["id"]
+        r.read()
 
 # ── 7. Send preview email ─────────────────────────────────────────────────────
 def send_preview(content: dict, slide_urls: list[str], post_id: str):
@@ -369,15 +389,24 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
 if __name__ == "__main__":
     print("=== NeuroDigest Social Daily ===")
 
-    print("\n[1/6] Fetching articles from PubMed...")
+    print("\n[1/6] Fetching articles from Notion...")
     articles = fetch_articles()
-    print(f"      {len(articles)} articles found")
+    print(f"      {len(articles)} articles found in Notion")
+    if not articles:
+        print("      Notion empty — falling back to PubMed...")
+        articles = fetch_pubmed_articles()
+        print(f"      {len(articles)} articles from PubMed")
     if not articles:
         print("No articles found — exiting.")
         sys.exit(0)
 
     print("\n[2/6] Generating carousel with Claude...")
     content = generate_content(articles)
+    # Preserve notion_id from the chosen article (match by URL)
+    for a in articles:
+        if a["url"] == content.get("article_url") or a["title"][:50] in content.get("article_title",""):
+            content["notion_id"] = a.get("notion_id", "")
+            break
     print(f"      {content['article_title'][:70]}")
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -402,11 +431,13 @@ if __name__ == "__main__":
         sb.table("social_posts").update({"slide_urls": slide_urls}).eq("id", post_id).execute()
         print(f"      {len(slide_urls)} images uploaded")
 
-    print("\n[5b] Saving to Notion...")
+    print("\n[5b] Updating Notion article...")
     try:
-        notion_id = save_to_notion(content)
-        sb.table("social_posts").update({"notion_page_id": notion_id}).eq("id", post_id).execute()
-        print(f"      Notion page: {notion_id}")
+        notion_id = content.get("notion_id", "")
+        if notion_id:
+            update_notion_article(notion_id)
+            sb.table("social_posts").update({"notion_page_id": notion_id}).eq("id", post_id).execute()
+            print(f"      Notion page updated: {notion_id}")
     except Exception as e:
         print(f"      Notion warning: {e}")
 
