@@ -161,17 +161,8 @@ Return ONLY valid JSON with this exact structure:
 
 # ── 3. Build slide HTML ───────────────────────────────────────────────────────
 def dots_html(current: int, total: int, light: bool = False) -> str:
-    base = "rgba(255,255,255,.2)" if light else "#ddd"
-    on   = "#c0392b"
-    return (
-        '<div style="display:flex;gap:10px;margin-top:48px">'
-        + "".join(
-            f'<div style="width:12px;height:12px;border-radius:50%;'
-            f'background:{on if i == current else base}"></div>'
-            for i in range(total)
-        )
-        + "</div>"
-    )
+    # No navigation dots in static PNG slides
+    return ""
 
 def build_slide_html(slide: dict, idx: int, total: int) -> str:
     d = dots_html(idx, total, light=(slide["type"] in ("cover", "stat", "cta")))
@@ -430,12 +421,21 @@ if __name__ == "__main__":
 
     print("\n[2/6] Generating carousel with Claude...")
     content = generate_content(articles)
-    # Preserve notion_id from the chosen article (match by URL)
+    # Match generated content back to original article to get REAL url + notion_id
+    matched = None
     for a in articles:
-        if a["url"] == content.get("article_url") or a["title"][:50] in content.get("article_title",""):
-            content["notion_id"] = a.get("notion_id", "")
+        if a["title"][:40].lower() in content.get("article_title","").lower() or \
+           content.get("article_title","")[:40].lower() in a["title"].lower():
+            matched = a
             break
+    if not matched and articles:
+        matched = articles[0]  # fallback: first article
+    if matched:
+        content["article_url"] = matched["url"]   # always use real URL
+        content["journal"]     = matched.get("journal", content.get("journal", ""))
+        content["notion_id"]   = matched.get("notion_id", "")
     print(f"      {content['article_title'][:70]}")
+    print(f"      URL: {content['article_url']}")
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
