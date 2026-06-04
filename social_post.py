@@ -121,8 +121,10 @@ def post_facebook(cover_url: str, text: str, article_url: str, journal: str = ""
 # ── Build Instagram caption ───────────────────────────────────────────────────
 def build_caption(post: dict) -> str:
     text = post.get("fb_text", "").strip()
+    article_url = post.get("article_url", "")
     return (
         f"{text}\n\n"
+        f"{article_url}\n\n"
         f"#neurology #neurodigest #neurologia #neuroscience #medicaleducation"
     )
 
