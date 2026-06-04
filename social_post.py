@@ -5,7 +5,7 @@ Checks for approved social posts and publishes to Instagram + Facebook.
 """
 
 import os, json, sys, time
-import urllib.request, urllib.error
+import urllib.request, urllib.error, urllib.parse
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -26,6 +26,17 @@ def graph_post(path: str, payload: dict) -> dict:
     data = json.dumps(payload).encode()
     req  = urllib.request.Request(url, data=data)
     req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        raise RuntimeError(f"Graph API error {e.code}: {body}")
+
+def graph_get(path: str, params: dict) -> dict:
+    qs  = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+    url = f"https://graph.facebook.com/{GRAPH_V}/{path}?{qs}"
+    req = urllib.request.Request(url)
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             return json.loads(r.read())
@@ -63,18 +74,20 @@ def post_instagram_carousel(slide_urls: list[str], caption: str) -> str:
 
     # 3. Wait for processing
     print("  Waiting for processing...")
-    for attempt in range(10):
-        status = graph_post(f"{carousel_id}", {
+    for attempt in range(12):
+        time.sleep(5)
+        status = graph_get(carousel_id, {
             "fields":       "status_code",
             "access_token": FB_PAGE_TOKEN,
         })
-        code = status.get("status_code", "")
+        code = status.get("status_code", "IN_PROGRESS")
         print(f"    Status: {code}")
         if code == "FINISHED":
             break
         if code == "ERROR":
             raise RuntimeError("Instagram media processing failed")
-        time.sleep(5)
+    else:
+        raise RuntimeError("Instagram media processing timed out")
 
     # 4. Publish
     print("  Publishing carousel...")
