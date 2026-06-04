@@ -8,9 +8,10 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 
-def set_approved(supabase_url: str, supabase_key: str, post_id: str) -> bool:
+def set_approved(supabase_url: str, supabase_key: str, post_id: str, platform: str = "") -> bool:
+    field = "ig_approved" if platform == "ig" else "fb_approved" if platform == "fb" else "approved"
     patch_url = f"{supabase_url}/rest/v1/social_posts?id=eq.{post_id}"
-    data      = json.dumps({"approved": True}).encode()
+    data      = json.dumps({field: True}).encode()
     req       = urllib.request.Request(patch_url, data=data, method="PATCH")
     req.add_header("apikey", supabase_key)
     req.add_header("Authorization", f"Bearer {supabase_key}")
@@ -32,8 +33,9 @@ class handler(BaseHTTPRequestHandler):
         supabase_key   = os.getenv("SUPABASE_SERVICE_KEY", "")
 
         params  = parse_qs(urlparse(self.path).query)
-        token   = params.get("token",   [""])[0]
-        post_id = params.get("post_id", [""])[0]
+        token    = params.get("token",    [""])[0]
+        post_id  = params.get("post_id",  [""])[0]
+        platform = params.get("platform", [""])[0]  # "ig" or "fb"
 
         if not approve_secret or not hmac.compare_digest(token, approve_secret):
             self._respond(403, "❌ Invalid token.")
@@ -43,7 +45,7 @@ class handler(BaseHTTPRequestHandler):
             self._respond(400, "❌ Missing post_id.")
             return
 
-        ok = set_approved(supabase_url, supabase_key, post_id)
+        ok = set_approved(supabase_url, supabase_key, post_id, platform)
         if ok:
             self._respond(200, """
             <html><body style="font-family:Helvetica,Arial,sans-serif;
@@ -51,9 +53,9 @@ class handler(BaseHTTPRequestHandler):
               <div style="max-width:480px;margin:0 auto;background:#fff;
                           padding:40px;border-top:4px solid #0e7c5a">
                 <div style="font-size:48px;margin-bottom:16px">✅</div>
-                <h2 style="color:#1a1a2e;margin:0 0 8px">Post approvato</h2>
+                <h2 style="color:#1a1a2e;margin:0 0 8px">Post approved</h2>
                 <p style="color:#555;font-size:14px;margin:0 0 8px">
-                  Will be posted to Instagram and Facebook
+                  Will be posted today at 14:00
                 </p>
                 <p style="color:#0e7c5a;font-size:18px;font-weight:700;margin:0">
                   Today at 14:00
