@@ -85,18 +85,19 @@ def post_instagram_carousel(slide_urls: list[str], caption: str) -> str:
     return result["id"]
 
 # ── Facebook post ─────────────────────────────────────────────────────────────
-def build_fb_message(text: str, article_url: str) -> str:
+def build_fb_message(text: str, article_url: str, journal: str = "") -> str:
+    journal_line = f"📋 {journal}" if journal else "📋 PubMed"
     return (
-        f"{text}\n\n"
-        f"📖 Read the full article: {article_url}\n\n"
-        f"🧠 Subscribe to our free weekly neurology newsletter:\n"
-        f"www.neuro-digest.com"
+        f"{text}\n"
+        f"{journal_line}\n"
+        f"{article_url}\n"
+        f"🔗 Newsletter: https://www.neuro-digest.com"
     )
 
-def post_facebook(cover_url: str, text: str, article_url: str) -> str:
+def post_facebook(cover_url: str, text: str, article_url: str, journal: str = "") -> str:
     """Post to Facebook Page with cover image."""
     print("  Posting to Facebook...")
-    message = build_fb_message(text, article_url)
+    message = build_fb_message(text, article_url, journal)
     result = graph_post(f"{FB_PAGE_ID}/photos", {
         "url":          cover_url,
         "message":      message,
@@ -160,7 +161,7 @@ if __name__ == "__main__":
     # Post to Facebook (use cover image = first slide)
     try:
         print("\n[2/2] Posting to Facebook...")
-        fb_post_id = post_facebook(slide_urls[0], fb_text, post["article_url"])
+        fb_post_id = post_facebook(slide_urls[0], fb_text, post["article_url"], post.get("journal", ""))
         print(f"  ✓ Facebook post ID: {fb_post_id}")
     except Exception as e:
         print(f"  ✗ Facebook error: {e}")

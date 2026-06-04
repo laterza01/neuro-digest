@@ -144,7 +144,7 @@ Return ONLY valid JSON with this exact structure:
     {{"type": "source",  "journal": "journal name",     "year": "2025 or 2026", "url": "short URL"}},
     {{"type": "cta"}}
   ],
-  "fb_text": "3-4 sentence Facebook post. Professional tone, no emojis, English. Do NOT include URLs or hashtags — these will be added automatically."
+  "fb_text": "3-4 short punchy sentences about the clinical finding and its implication. Direct, no fluff. English. Do NOT include URLs, journal name, or hashtags — these are added automatically."
 }}"""
 
     msg = ai.messages.create(
