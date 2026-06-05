@@ -307,7 +307,33 @@ def upload_images(paths: list[Path], post_id: str) -> list[str]:
         urls.append(public_url)
     return urls
 
-# ── 6. Update Notion article → mark as Scheduled for Social ──────────────────
+# ── 6. Save or update article in Notion ──────────────────────────────────────
+def create_notion_article(article: dict) -> str:
+    """Create a new Notion page for an article coming from PubMed fallback."""
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+    today = datetime.now(timezone.utc).date().isoformat()
+    payload = {
+        "parent": {"database_id": notion_db_id},
+        "properties": {
+            "Nome":      {"title": [{"text": {"content": article["title"][:200]}}]},
+            "URL":       {"url": article["url"]},
+            "Journal":   {"select": {"name": article.get("journal", "PubMed")[:100]}},
+            "Status":    {"select": {"name": "Scheduled"}},
+            "Use for":   {"multi_select": [{"name": "Social"}]},
+            "Published": {"date": {"start": today}},
+        }
+    }
+    req = urllib.request.Request(
+        "https://api.notion.com/v1/pages",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {notion_token}",
+                 "Notion-Version": "2022-06-28",
+                 "Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req) as r:
+        return json.loads(r.read())["id"]
+
 def update_notion_article(notion_id: str) -> None:
     """Mark existing Notion article as Scheduled + add Social to Use for."""
     notion_token = os.getenv("NOTION_TOKEN", "")
@@ -485,13 +511,21 @@ if __name__ == "__main__":
         }).eq("id", post_id).execute()
         print(f"      {len(slide_urls)} IG slides + 1 FB cover uploaded")
 
-    print("\n[5b] Updating Notion article...")
+    print("\n[5b] Saving to Notion...")
     try:
         notion_id = content.get("notion_id", "")
         if notion_id:
+            # Article already in Notion — mark as Scheduled + Social
             update_notion_article(notion_id)
-            sb.table("social_posts").update({"notion_page_id": notion_id}).eq("id", post_id).execute()
-            print(f"      Notion page updated: {notion_id}")
+            print(f"      Notion article updated: {notion_id}")
+        else:
+            # Article from PubMed fallback — create in Notion first
+            matched_article = next(
+                (a for a in articles if a["url"] == content.get("article_url")), articles[0]
+            )
+            notion_id = create_notion_article(matched_article)
+            print(f"      Notion article created: {notion_id}")
+        sb.table("social_posts").update({"notion_page_id": notion_id}).eq("id", post_id).execute()
     except Exception as e:
         print(f"      Notion warning: {e}")
 
