@@ -1573,7 +1573,7 @@ def send_guidelines_edition(
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-def run():
+def run(generate_only: bool = False):
     """
     Cron entry point (fires every 30 min on Mon+Tue UTC: '0,30 * * * 1,2').
 
@@ -1686,12 +1686,24 @@ def run():
         subject   = f"NeuroDigest — {date_str}"
         digest_id = save_digest_to_supabase(sb, subject, html, plain, edition, digest_data)
 
-        # Articles saved to Notion on Sunday via preview_send.py
+        # Save articles to Notion immediately after generation
+        print("\nSaving articles to Notion...")
+        try:
+            saved = save_articles_to_notion(digest_data)
+            print(f"  {saved} articles saved to Notion")
+        except Exception as e:
+            print(f"  Notion warning: {e}")
+
         if digest_id:
             print(f"  Digest persisted to Supabase (id={digest_id})")
         else:
             print("  Warning: could not persist digest to Supabase")
             digest_id = None
+
+        # If generate_only (Sunday preview mode) — stop here, don't send
+        if generate_only:
+            print("\n✓ Generate-only mode — digest saved, articles on Notion. Preview will follow.")
+            return
 
     # Step 2: deduplication
     already_sent: set[str] = set()
@@ -1776,4 +1788,10 @@ def _mark_notion_articles_used_mail(digest_data: dict) -> None:
 
 
 if __name__ == "__main__":
-    run()
+    import sys as _sys
+    if "--generate-only" in _sys.argv:
+        # Sunday mode: generate newsletter + save to Supabase + save articles to Notion
+        # Does NOT send to subscribers (approved flag not set yet)
+        run(generate_only=True)
+    else:
+        run()
