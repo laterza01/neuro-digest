@@ -132,12 +132,12 @@ def build_caption(post: dict) -> str:
 if __name__ == "__main__":
     print("=== NeuroDigest Social Post ===")
 
-    # Fetch approved pending post
+    # Fetch posts where at least one platform is approved and not yet posted
     rows = (
         sb.table("social_posts")
           .select("*")
-          .eq("approved", True)
           .is_("posted_at", "null")
+          .or_("approved.eq.true,ig_approved.eq.true,fb_approved.eq.true")
           .order("created_at", desc=True)
           .limit(1)
           .execute()
@@ -161,11 +161,13 @@ if __name__ == "__main__":
         "fb_text":       fb_text,
     }
 
-    ig_post_id = post.get("ig_post_id")
-    fb_post_id = post.get("fb_post_id")
+    ig_post_id   = post.get("ig_post_id")
+    fb_post_id   = post.get("fb_post_id")
+    do_instagram = post.get("ig_approved") or post.get("approved")
+    do_facebook  = post.get("fb_approved") or post.get("approved")
 
-    # Post to Instagram (skip if already done)
-    if not ig_post_id:
+    # Post to Instagram (skip if already done or not approved)
+    if not ig_post_id and do_instagram:
         try:
             print("\n[1/2] Posting to Instagram...")
             caption    = build_caption(post)
@@ -176,8 +178,8 @@ if __name__ == "__main__":
     else:
         print(f"\n[1/2] Instagram already posted ({ig_post_id}) — skipping")
 
-    # Post to Facebook (skip if already done)
-    if not fb_post_id:
+    # Post to Facebook (skip if already done or not approved)
+    if not fb_post_id and do_facebook:
         try:
             print("\n[2/2] Posting to Facebook...")
             # Use dedicated FB cover (no dots) if available, else first slide
