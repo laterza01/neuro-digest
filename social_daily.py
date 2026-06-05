@@ -470,7 +470,6 @@ if __name__ == "__main__":
             "article_url":   content["article_url"],
             "journal":       content.get("journal", ""),
             "fb_text":       content["fb_text"],
-            "ig_text":       content.get("ig_text", content["fb_text"]),
             "approved":      False,
         }).execute()
         post_id = row.data[0]["id"]
