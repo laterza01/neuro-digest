@@ -5,5 +5,11 @@
   "rewrites": [
     { "source": "/preferences",          "destination": "/preferences.html" },
     { "source": "/success",              "destination": "/success.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/trigger_social",
+      "schedule": "0 6 * * *"
+    }
   ]
 }
