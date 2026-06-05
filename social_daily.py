@@ -32,43 +32,91 @@ resend_lib.api_key = os.getenv("RESEND_API_KEY", "")
 from_addr = os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>")
 ai = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 
-# ── 1a. Fetch from PubMed E-utilities (fallback) ─────────────────────────────
+# ── 1. Fetch fresh articles from PubMed (always daily) ───────────────────────
 ESEARCH_URL = (
     "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     "?db=pubmed"
     "&term=(neurology[MeSH]+OR+stroke[MeSH]+OR+multiple+sclerosis[MeSH]"
     "+OR+epilepsy[MeSH]+OR+Parkinson+disease[MeSH]+OR+dementia[MeSH])"
     "+AND+(clinical+trial[pt]+OR+review[pt]+OR+guideline[pt]+OR+meta-analysis[pt])"
-    "&retmax=20&sort=date&retmode=json&datetype=pdat&reldate=14"
+    "&retmax=20&sort=date&retmode=json&datetype=pdat&reldate=3"
 )
 
-def fetch_pubmed_articles() -> list[dict]:
+def fetch_fresh_articles() -> list[dict]:
+    """Fetch last 3 days of neurology articles from PubMed."""
     with urllib.request.urlopen(ESEARCH_URL, timeout=30) as r:
         data = json.loads(r.read())
     ids = data["esearchresult"]["idlist"]
     if not ids:
         return []
-    ids_str = ",".join(ids[:15])
+    ids_str = ",".join(ids[:20])
     summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id={ids_str}"
     with urllib.request.urlopen(summary_url, timeout=30) as r:
         summary = json.loads(r.read())
     articles = []
-    for uid in ids[:15]:
+    for uid in ids[:20]:
         if uid not in summary["result"]:
             continue
         art = summary["result"][uid]
         title = art.get("title", "").strip().rstrip(".")
         if title:
             articles.append({
-                "title":    title,
-                "url":      f"https://pubmed.ncbi.nlm.nih.gov/{uid}/",
-                "journal":  art.get("source", "PubMed"),
+                "title":   title,
+                "url":     f"https://pubmed.ncbi.nlm.nih.gov/{uid}/",
+                "journal": art.get("source", "PubMed"),
                 "abstract": title,
-                "notion_id": "",
             })
     return articles
 
-# ── 1b. Fetch articles from Notion (primary source) ───────────────────────────
+def get_existing_notion_urls() -> set:
+    """Get all URLs already saved in Notion to avoid duplicates."""
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+    req = urllib.request.Request(
+        f"https://api.notion.com/v1/databases/{notion_db_id}/query",
+        data=json.dumps({"page_size": 100}).encode(),
+        headers={"Authorization": f"Bearer {notion_token}",
+                 "Notion-Version": "2022-06-28",
+                 "Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        results = json.loads(r.read()).get("results", [])
+    return {p["properties"].get("URL", {}).get("url", "") for p in results if p["properties"].get("URL", {}).get("url")}
+
+def save_all_to_notion(articles: list[dict], existing_urls: set) -> list[dict]:
+    """Save all new articles to Notion. Returns articles with notion_id filled in."""
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+    today = datetime.now(timezone.utc).date().isoformat()
+    saved = []
+    for art in articles:
+        if art["url"] in existing_urls:
+            continue  # already in Notion — skip
+        payload = {
+            "parent": {"database_id": notion_db_id},
+            "properties": {
+                "Nome":      {"title": [{"text": {"content": art["title"][:200]}}]},
+                "URL":       {"url": art["url"]},
+                "Journal":   {"select": {"name": art.get("journal", "PubMed")[:100]}},
+                "Status":    {"select": {"name": "New"}},
+                "Use for":   {"multi_select": [{"name": "Social"}]},
+                "Published": {"date": {"start": today}},
+            }
+        }
+        req = urllib.request.Request(
+            "https://api.notion.com/v1/pages",
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {notion_token}",
+                     "Notion-Version": "2022-06-28",
+                     "Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req) as r:
+            page_id = json.loads(r.read())["id"]
+        art["notion_id"] = page_id
+        saved.append(art)
+    return saved
+
+# ── Kept for compatibility ────────────────────────────────────────────────────
 def fetch_articles() -> list[dict]:
     """Read New articles from Notion not yet used for Social."""
     notion_token = os.getenv("NOTION_TOKEN", "")
@@ -455,16 +503,29 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
 if __name__ == "__main__":
     print("=== NeuroDigest Social Daily ===")
 
-    print("\n[1/6] Fetching articles from Notion...")
-    articles = fetch_articles()
-    print(f"      {len(articles)} articles found in Notion")
-    if not articles:
-        print("      Notion empty — falling back to PubMed...")
-        articles = fetch_pubmed_articles()
-        print(f"      {len(articles)} articles from PubMed")
-    if not articles:
+    print("\n[1/6] Fetching fresh articles from PubMed...")
+    fresh = fetch_fresh_articles()
+    print(f"      {len(fresh)} articles found")
+    if not fresh:
         print("No articles found — exiting.")
         sys.exit(0)
+
+    print("      Checking existing Notion URLs (no duplicates)...")
+    existing_urls = get_existing_notion_urls()
+    new_articles = [a for a in fresh if a["url"] not in existing_urls]
+    print(f"      {len(new_articles)} new articles to save to Notion")
+
+    if new_articles:
+        saved = save_all_to_notion(new_articles, existing_urls)
+        print(f"      {len(saved)} articles saved to Notion")
+    else:
+        print("      All articles already in Notion")
+
+    # All fresh articles (with notion_id if newly saved, empty if already existed)
+    articles = fresh
+    for a in articles:
+        if not a.get("notion_id"):
+            a["notion_id"] = ""  # will be set properly after matching
 
     print("\n[2/6] Generating carousel with Claude...")
     content = generate_content(articles)
