@@ -462,11 +462,6 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
         ✅ &nbsp;APPROVE Story — Immagini (tocca per avanzare)
       </a>
       <br>
-      <a href="{ig_story_video_approve}"
-         style="display:inline-block;background:#F77737;color:#fff;font-size:14px;
-                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
-        ✅ &nbsp;APPROVE Story — Video (scorre da solo, 21 sec)
-      </a>
     </td></tr>
   </table>
   <div style="background:#fff;padding:20px 24px;margin-bottom:16px;border-radius:8px">
@@ -512,11 +507,6 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
         ✅ &nbsp;APPROVE Story — Immagini (tocca per avanzare)
       </a>
       <br>
-      <a href="{fb_story_video_approve}"
-         style="display:inline-block;background:#F77737;color:#fff;font-size:14px;
-                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
-        ✅ &nbsp;APPROVE Story — Video (scorre da solo, 21 sec)
-      </a>
     </td></tr>
   </table>
   <div style="background:#fff;padding:20px 24px;margin-bottom:16px;border-radius:8px">
@@ -552,7 +542,7 @@ def send_reel_email(content: dict, reel_url: str):
                 text-transform:uppercase;color:#c0392b">Instagram Reel</p>
       <p style="margin:0 0 16px;font-size:13px;color:rgba(255,255,255,.7)">
         7 slides · 3 sec each · 21 sec total · 1080×1080px<br>
-        Scarica, aggiungi la musica su Instagram e pubblica come Reel.
+        Scarica e usalo come <strong>Reel</strong> (aggiungi musica) o come <strong>Story video</strong> (scorre da solo).
       </p>
       <a href="{reel_url}"
          style="display:inline-block;background:#c0392b;color:#fff;font-size:14px;
@@ -564,12 +554,15 @@ def send_reel_email(content: dict, reel_url: str):
   <div style="background:#fff;padding:20px 24px;border-radius:8px">
     <p style="font-size:11px;color:#888;letter-spacing:.1em;text-transform:uppercase;margin:0 0 12px">
       Come pubblicare</p>
+    <p style="font-size:13px;color:#888;margin:0 0 8px"><strong>Come Reel:</strong></p>
+    <ol style="font-size:14px;color:#333;line-height:2;margin:0 0 16px;padding-left:20px">
+      <li>Scarica l'MP4</li>
+      <li>Instagram → + → Reel → carica video → aggiungi musica → pubblica</li>
+    </ol>
+    <p style="font-size:13px;color:#888;margin:0 0 8px"><strong>Come Story video:</strong></p>
     <ol style="font-size:14px;color:#333;line-height:2;margin:0;padding-left:20px">
-      <li>Scarica l'MP4 qui sopra</li>
-      <li>Apri Instagram → + → Reel</li>
-      <li>Carica il video</li>
-      <li>Aggiungi la musica che preferisci</li>
-      <li>Pubblica</li>
+      <li>Scarica l'MP4</li>
+      <li>Instagram → + → Storia → carica video → pubblica</li>
     </ol>
   </div>
 </div></body></html>"""
