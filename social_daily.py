@@ -314,7 +314,19 @@ body{{width:1080px;height:1080px;background:#c0392b;display:flex;flex-direction:
 
     return ""
 
-# ── 4. Render PNG ─────────────────────────────────────────────────────────────
+# ── 4a. Generate MP4 Reel from PNG slides ────────────────────────────────────
+def generate_reel_mp4(slide_paths: list[Path], out_dir: Path, seconds_per_slide: int = 3) -> Path:
+    """Stitch PNG slides into an MP4 video at 3 sec/slide for Instagram Reel."""
+    from moviepy import ImageClip, concatenate_videoclips
+    clips = [ImageClip(str(p)).with_duration(seconds_per_slide) for p in slide_paths]
+    video  = concatenate_videoclips(clips, method="compose")
+    output = out_dir / "reel.mp4"
+    video.write_videofile(str(output), fps=30, codec="libx264",
+                          audio=False, logger=None)
+    print(f"  Reel MP4 generated: {output.name} ({len(slide_paths)} slides × {seconds_per_slide}s)")
+    return output
+
+# ── 4b. Render PNG ────────────────────────────────────────────────────────────
 def render_slides(slides: list[dict], out_dir: Path) -> tuple[list[Path], Path]:
     """Returns (ig_slide_paths, fb_cover_path)"""
     paths = []
@@ -499,6 +511,50 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     })
     print(f"✓ Facebook preview sent")
 
+def send_reel_email(content: dict, reel_url: str):
+    """Email 3: Reel MP4 download link — user adds music and posts manually."""
+    title_short = content['article_title'][:55]
+    html_reel = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#f4f3f0;font-family:Helvetica,Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background:#1a1a2e;border-top:3px solid #c0392b;border-radius:8px;margin-bottom:20px">
+    <tr><td style="padding:24px;text-align:center">
+      <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:2px;
+                text-transform:uppercase;color:#c0392b">Instagram Reel</p>
+      <p style="margin:0 0 16px;font-size:13px;color:rgba(255,255,255,.7)">
+        7 slides · 3 sec each · 21 sec total · 1080×1080px<br>
+        Scarica, aggiungi la musica su Instagram e pubblica come Reel.
+      </p>
+      <a href="{reel_url}"
+         style="display:inline-block;background:#c0392b;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px">
+        ⬇️ &nbsp;SCARICA MP4
+      </a>
+    </td></tr>
+  </table>
+  <div style="background:#fff;padding:20px 24px;border-radius:8px">
+    <p style="font-size:11px;color:#888;letter-spacing:.1em;text-transform:uppercase;margin:0 0 12px">
+      Come pubblicare</p>
+    <ol style="font-size:14px;color:#333;line-height:2;margin:0;padding-left:20px">
+      <li>Scarica l'MP4 qui sopra</li>
+      <li>Apri Instagram → + → Reel</li>
+      <li>Carica il video</li>
+      <li>Aggiungi la musica che preferisci</li>
+      <li>Pubblica</li>
+    </ol>
+  </div>
+</div></body></html>"""
+
+    resend_lib.Emails.send({
+        "from":    from_addr,
+        "to":      PREVIEW_TO,
+        "subject": f"[Reel MP4] {title_short}",
+        "html":    html_reel,
+        "text":    f"Reel MP4 pronto.\nScarica: {reel_url}\nAggiungi musica su Instagram e pubblica come Reel.",
+    })
+    print(f"✓ Reel email sent")
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("=== NeuroDigest Social Daily ===")
@@ -551,6 +607,9 @@ if __name__ == "__main__":
         print("\n[3/6] Rendering slides to PNG...")
         slide_paths, fb_cover_path = render_slides(content["slides"], tmp_path)
 
+        print("\n[3b] Generating Reel MP4...")
+        reel_path = generate_reel_mp4(slide_paths, tmp_path)
+
         print("\n[4/6] Saving post to Supabase...")
         row = sb.table("social_posts").insert({
             "article_title": content["article_title"],
@@ -562,15 +621,23 @@ if __name__ == "__main__":
         post_id = row.data[0]["id"]
         print(f"      Post ID: {post_id}")
 
-        print("\n[5/6] Uploading images to Supabase Storage...")
-        slide_urls  = upload_images(slide_paths, post_id)
-        # Upload FB cover separately
+        print("\n[5/6] Uploading images + reel to Supabase Storage...")
+        slide_urls   = upload_images(slide_paths, post_id)
         fb_cover_url = upload_images([fb_cover_path], post_id)[0]
+        # Upload reel MP4
+        with open(reel_path, "rb") as f:
+            reel_data = f.read()
+        sb.storage.from_("social-images").upload(
+            f"{post_id}/reel.mp4", reel_data,
+            file_options={"content-type": "video/mp4", "upsert": "true"}
+        )
+        reel_url = sb.storage.from_("social-images").get_public_url(f"{post_id}/reel.mp4")
         sb.table("social_posts").update({
             "slide_urls":   slide_urls,
             "fb_cover_url": fb_cover_url,
+            "reel_url":     reel_url,
         }).eq("id", post_id).execute()
-        print(f"      {len(slide_urls)} IG slides + 1 FB cover uploaded")
+        print(f"      {len(slide_urls)} IG slides + 1 FB cover + 1 Reel MP4 uploaded")
 
     print("\n[5b] Saving to Notion...")
     try:
@@ -590,7 +657,8 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"      Notion warning: {e}")
 
-    print("\n[6/6] Sending preview email...")
+    print("\n[6/6] Sending preview emails...")
     send_preview(content, slide_urls, post_id)
+    send_reel_email(content, reel_url)
 
     print("\n✓ Done!")
