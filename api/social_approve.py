@@ -9,7 +9,12 @@ from urllib.parse import urlparse, parse_qs
 
 
 def set_approved(supabase_url: str, supabase_key: str, post_id: str, platform: str = "") -> bool:
-    field = "ig_approved" if platform == "ig" else "fb_approved" if platform == "fb" else "approved"
+    field = {
+        "ig":       "ig_approved",
+        "fb":       "fb_approved",
+        "ig_story": "ig_story_approved",
+        "fb_story": "fb_story_approved",
+    }.get(platform, "approved")
     patch_url = f"{supabase_url}/rest/v1/social_posts?id=eq.{post_id}"
     data      = json.dumps({field: True}).encode()
     req       = urllib.request.Request(patch_url, data=data, method="PATCH")

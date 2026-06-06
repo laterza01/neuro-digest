@@ -97,6 +97,49 @@ def post_instagram_carousel(slide_urls: list[str], caption: str) -> str:
     })
     return result["id"]
 
+# ── Instagram Stories ─────────────────────────────────────────────────────────
+def post_instagram_stories(slide_urls: list[str]) -> list[str]:
+    """Post all slides as individual Instagram Stories."""
+    published_ids = []
+    for i, url in enumerate(slide_urls):
+        # Create story container
+        container = graph_post(f"{IG_ACCOUNT_ID}/media", {
+            "image_url":    url,
+            "media_type":   "STORIES",
+            "access_token": FB_PAGE_TOKEN,
+        })
+        container_id = container["id"]
+        # Wait for processing
+        for _ in range(10):
+            time.sleep(3)
+            status = graph_get(container_id, {"fields": "status_code", "access_token": FB_PAGE_TOKEN})
+            if status.get("status_code") == "FINISHED":
+                break
+        # Publish
+        result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
+            "creation_id":  container_id,
+            "access_token": FB_PAGE_TOKEN,
+        })
+        published_ids.append(result["id"])
+        print(f"  Story {i+1}/{len(slide_urls)} posted: {result['id']}")
+        time.sleep(2)
+    return published_ids
+
+# ── Facebook Stories ───────────────────────────────────────────────────────────
+def post_facebook_stories(slide_urls: list[str]) -> list[str]:
+    """Post all slides as individual Facebook Stories."""
+    published_ids = []
+    for i, url in enumerate(slide_urls):
+        result = graph_post(f"{FB_PAGE_ID}/photo_stories", {
+            "url":          url,
+            "access_token": FB_PAGE_TOKEN,
+        })
+        story_id = result.get("post_id", result.get("id", ""))
+        published_ids.append(story_id)
+        print(f"  FB Story {i+1}/{len(slide_urls)} posted: {story_id}")
+        time.sleep(2)
+    return published_ids
+
 # ── Facebook post ─────────────────────────────────────────────────────────────
 def build_fb_message(text: str, article_url: str, journal: str = "") -> str:
     journal_line = f"📋 {journal}" if journal else "📋 PubMed"
@@ -165,6 +208,8 @@ if __name__ == "__main__":
     fb_post_id   = post.get("fb_post_id")
     do_instagram = post.get("ig_approved") or post.get("approved")
     do_facebook  = post.get("fb_approved") or post.get("approved")
+    do_ig_story  = post.get("ig_story_approved", False)
+    do_fb_story  = post.get("fb_story_approved", False)
 
     # Post to Instagram (skip if already done or not approved)
     if not ig_post_id and do_instagram:
@@ -181,15 +226,32 @@ if __name__ == "__main__":
     # Post to Facebook (skip if already done or not approved)
     if not fb_post_id and do_facebook:
         try:
-            print("\n[2/2] Posting to Facebook...")
-            # Use dedicated FB cover (no dots) if available, else first slide
+            print("\n[2/4] Posting to Facebook...")
             fb_cover = post.get("fb_cover_url") or slide_urls[0]
             fb_post_id = post_facebook(fb_cover, fb_text, post["article_url"], post.get("journal", ""))
             print(f"  ✓ Facebook post ID: {fb_post_id}")
         except Exception as e:
             print(f"  ✗ Facebook error: {e}")
     else:
-        print(f"\n[2/2] Facebook already posted ({fb_post_id}) — skipping")
+        print(f"\n[2/4] Facebook already posted — skipping")
+
+    # Instagram Stories
+    if do_ig_story:
+        try:
+            print(f"\n[3/4] Posting {len(slide_urls)} Instagram Stories...")
+            post_instagram_stories(slide_urls)
+            print(f"  ✓ Instagram Stories posted")
+        except Exception as e:
+            print(f"  ✗ Instagram Stories error: {e}")
+
+    # Facebook Stories
+    if do_fb_story:
+        try:
+            print(f"\n[4/4] Posting {len(slide_urls)} Facebook Stories...")
+            post_facebook_stories(slide_urls)
+            print(f"  ✓ Facebook Stories posted")
+        except Exception as e:
+            print(f"  ✗ Facebook Stories error: {e}")
 
     # Update Supabase
     sb.table("social_posts").update({

@@ -421,8 +421,10 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     today_str  = datetime.now().strftime("%A, %d %B %Y")
     title_short = content['article_title'][:55]
 
-    ig_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig"
-    fb_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb"
+    ig_approve       = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig"
+    fb_approve       = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb"
+    ig_story_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig_story"
+    fb_story_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb_story"
 
     fb_full = (
         f"{content['fb_text']}\n"
@@ -448,8 +450,14 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
       <p style="margin:0 0 16px;font-size:13px;color:#555">{len(slide_urls)} slides · 1080×1080px</p>
       <a href="{ig_approve}"
          style="display:inline-block;background:#E1306C;color:#fff;font-size:14px;
-                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px">
-        ✅ &nbsp;APPROVE — Post on Instagram at 14:00
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-bottom:10px">
+        ✅ &nbsp;APPROVE Carousel
+      </a>
+      <br>
+      <a href="{ig_story_approve}"
+         style="display:inline-block;background:#833AB4;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
+        ✅ &nbsp;APPROVE Story (7 slides)
       </a>
     </td></tr>
   </table>
@@ -486,8 +494,14 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
       <p style="margin:0 0 16px;font-size:13px;color:#555">Cover image + post text</p>
       <a href="{fb_approve}"
          style="display:inline-block;background:#1877f2;color:#fff;font-size:14px;
-                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px">
-        ✅ &nbsp;APPROVE — Post on Facebook at 14:00
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-bottom:10px">
+        ✅ &nbsp;APPROVE Post
+      </a>
+      <br>
+      <a href="{fb_story_approve}"
+         style="display:inline-block;background:#0e7c5a;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
+        ✅ &nbsp;APPROVE Story (7 slides)
       </a>
     </td></tr>
   </table>
