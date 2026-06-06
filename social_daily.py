@@ -421,10 +421,12 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     today_str  = datetime.now().strftime("%A, %d %B %Y")
     title_short = content['article_title'][:55]
 
-    ig_approve       = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig"
-    fb_approve       = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb"
-    ig_story_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig_story"
-    fb_story_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb_story"
+    ig_approve             = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig"
+    fb_approve             = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb"
+    ig_story_approve       = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig_story"
+    fb_story_approve       = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb_story"
+    ig_story_video_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig_story_video"
+    fb_story_video_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb_story_video"
 
     fb_full = (
         f"{content['fb_text']}\n"
@@ -457,7 +459,13 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
       <a href="{ig_story_approve}"
          style="display:inline-block;background:#833AB4;color:#fff;font-size:14px;
                 font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
-        ✅ &nbsp;APPROVE Story (7 slides)
+        ✅ &nbsp;APPROVE Story — Immagini (tocca per avanzare)
+      </a>
+      <br>
+      <a href="{ig_story_video_approve}"
+         style="display:inline-block;background:#F77737;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
+        ✅ &nbsp;APPROVE Story — Video (scorre da solo, 21 sec)
       </a>
     </td></tr>
   </table>
@@ -501,7 +509,13 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
       <a href="{fb_story_approve}"
          style="display:inline-block;background:#0e7c5a;color:#fff;font-size:14px;
                 font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
-        ✅ &nbsp;APPROVE Story (7 slides)
+        ✅ &nbsp;APPROVE Story — Immagini (tocca per avanzare)
+      </a>
+      <br>
+      <a href="{fb_story_video_approve}"
+         style="display:inline-block;background:#F77737;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
+        ✅ &nbsp;APPROVE Story — Video (scorre da solo, 21 sec)
       </a>
     </td></tr>
   </table>

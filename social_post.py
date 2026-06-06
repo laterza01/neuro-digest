@@ -208,8 +208,11 @@ if __name__ == "__main__":
     fb_post_id   = post.get("fb_post_id")
     do_instagram = post.get("ig_approved") or post.get("approved")
     do_facebook  = post.get("fb_approved") or post.get("approved")
-    do_ig_story  = post.get("ig_story_approved", False)
-    do_fb_story  = post.get("fb_story_approved", False)
+    do_ig_story        = post.get("ig_story_approved", False)
+    do_fb_story        = post.get("fb_story_approved", False)
+    do_ig_story_video  = post.get("ig_story_video_approved", False)
+    do_fb_story_video  = post.get("fb_story_video_approved", False)
+    reel_url           = post.get("reel_url", "")
 
     # Post to Instagram (skip if already done or not approved)
     if not ig_post_id and do_instagram:
@@ -247,11 +250,46 @@ if __name__ == "__main__":
     # Facebook Stories
     if do_fb_story:
         try:
-            print(f"\n[4/4] Posting {len(slide_urls)} Facebook Stories...")
+            print(f"\n[4/6] Posting {len(slide_urls)} Facebook Stories...")
             post_facebook_stories(slide_urls)
             print(f"  ✓ Facebook Stories posted")
         except Exception as e:
             print(f"  ✗ Facebook Stories error: {e}")
+
+    # Instagram Story Video (MP4)
+    if do_ig_story_video and reel_url:
+        try:
+            print(f"\n[5/6] Posting Instagram Story Video...")
+            container = graph_post(f"{IG_ACCOUNT_ID}/media", {
+                "video_url":    reel_url,
+                "media_type":   "STORIES",
+                "access_token": FB_PAGE_TOKEN,
+            })
+            cid = container["id"]
+            for _ in range(15):
+                time.sleep(5)
+                status = graph_get(cid, {"fields": "status_code", "access_token": FB_PAGE_TOKEN})
+                if status.get("status_code") == "FINISHED":
+                    break
+            result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
+                "creation_id": cid, "access_token": FB_PAGE_TOKEN
+            })
+            print(f"  ✓ Instagram Story Video posted: {result['id']}")
+        except Exception as e:
+            print(f"  ✗ Instagram Story Video error: {e}")
+
+    # Facebook Story Video (MP4)
+    if do_fb_story_video and reel_url:
+        try:
+            print(f"\n[6/6] Posting Facebook Story Video...")
+            result = graph_post(f"{FB_PAGE_ID}/video_stories", {
+                "file_url":    reel_url,
+                "video_state": "PUBLISHED",
+                "access_token": FB_PAGE_TOKEN,
+            })
+            print(f"  ✓ Facebook Story Video posted: {result.get('post_id','')}")
+        except Exception as e:
+            print(f"  ✗ Facebook Story Video error: {e}")
 
     # Update Supabase
     sb.table("social_posts").update({
