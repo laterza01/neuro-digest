@@ -120,11 +120,20 @@ def post_instagram_story(story_cover_url: str) -> str:
 # ── Facebook Story (1 cover verticale 1080x1920) ──────────────────────────────
 def post_facebook_story(story_cover_url: str) -> str:
     """Post single vertical cover (1080x1920) as Facebook Story."""
-    result = graph_post(f"{FB_PAGE_ID}/photo_stories", {
-        "photo": story_cover_url,
+    # Upload photo first, then publish as story
+    result = graph_post(f"{FB_PAGE_ID}/photos", {
+        "url":           story_cover_url,
+        "published":     False,
+        "temporary":     True,
+        "access_token":  FB_PAGE_TOKEN,
+    })
+    photo_id = result.get("id", "")
+    # Publish as story
+    story = graph_post(f"{FB_PAGE_ID}/photo_stories", {
+        "photo_id":     photo_id,
         "access_token": FB_PAGE_TOKEN,
     })
-    return result.get("post_id", result.get("id", ""))
+    return story.get("post_id", story.get("id", ""))
 
 # ── Facebook post ─────────────────────────────────────────────────────────────
 def build_fb_message(text: str, article_url: str, journal: str = "") -> str:
