@@ -314,6 +314,27 @@ body{{width:1080px;height:1080px;background:#c0392b;display:flex;flex-direction:
 
     return ""
 
+# ── Story cover HTML 1080x1920 ────────────────────────────────────────────────
+def build_story_cover_html(cover_slide: dict) -> str:
+    """Vertical 1080x1920 cover for Instagram + Facebook Stories."""
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{width:1080px;height:1920px;background:#1a1a2e;display:flex;flex-direction:column;
+     justify-content:space-between;padding:120px 80px;font-family:Georgia,serif}}
+</style></head><body>
+<div style="font-family:Helvetica,Arial,sans-serif;font-size:32px;color:#c0392b;
+            letter-spacing:.15em;text-transform:uppercase">NeuroDigest</div>
+<div>
+  <div style="font-family:Helvetica,Arial,sans-serif;font-size:24px;letter-spacing:.2em;
+              text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:32px">
+    {cover_slide.get('topic','')}</div>
+  <div style="font-size:72px;line-height:1.3;color:#fff">
+    {cover_slide.get('headline','')}</div>
+</div>
+<div style="font-family:Helvetica,Arial,sans-serif;font-size:28px;
+            color:rgba(255,255,255,.25)">neuro-digest.com</div>
+</body></html>"""
+
 # ── 4a. Generate MP4 Reel from PNG slides ────────────────────────────────────
 def generate_reel_mp4(slide_paths: list[Path], out_dir: Path, seconds_per_slide: int = 3) -> Path:
     """Stitch PNG slides into an MP4 video at 3 sec/slide for Instagram Reel."""
@@ -343,14 +364,22 @@ def render_slides(slides: list[dict], out_dir: Path) -> tuple[list[Path], Path]:
             paths.append(path)
             print(f"  Slide {i+1}/{total} rendered")
 
-        # Facebook cover — first slide WITHOUT dots
+        # Facebook/post cover — first slide WITHOUT dots (1080x1080)
         page.set_content(build_slide_html(slides[0], 0, total, show_dots=False), wait_until="networkidle")
         fb_cover = out_dir / "fb_cover.png"
         page.screenshot(path=str(fb_cover), full_page=False)
         print(f"  FB cover rendered (no dots)")
 
+        # Story cover — first slide vertical 1080x1920 (no dots)
+        page.set_viewport_size({"width": 1080, "height": 1920})
+        story_html = build_story_cover_html(slides[0])
+        page.set_content(story_html, wait_until="networkidle")
+        story_cover = out_dir / "story_cover.png"
+        page.screenshot(path=str(story_cover), full_page=False)
+        print(f"  Story cover rendered (1080x1920)")
+
         browser.close()
-    return paths, fb_cover
+    return paths, fb_cover, story_cover
 
 # ── 5. Upload to Supabase Storage ────────────────────────────────────────────
 def upload_images(paths: list[Path], post_id: str) -> list[str]:
@@ -626,7 +655,7 @@ if __name__ == "__main__":
         tmp_path = Path(tmp)
 
         print("\n[3/6] Rendering slides to PNG...")
-        slide_paths, fb_cover_path = render_slides(content["slides"], tmp_path)
+        slide_paths, fb_cover_path, story_cover_path = render_slides(content["slides"], tmp_path)
 
         print("\n[3b] Generating Reel MP4...")
         reel_path = generate_reel_mp4(slide_paths, tmp_path)
@@ -643,8 +672,9 @@ if __name__ == "__main__":
         print(f"      Post ID: {post_id}")
 
         print("\n[5/6] Uploading images + reel to Supabase Storage...")
-        slide_urls   = upload_images(slide_paths, post_id)
-        fb_cover_url = upload_images([fb_cover_path], post_id)[0]
+        slide_urls      = upload_images(slide_paths, post_id)
+        fb_cover_url    = upload_images([fb_cover_path], post_id)[0]
+        story_cover_url = upload_images([story_cover_path], post_id)[0]
         # Upload reel MP4
         with open(reel_path, "rb") as f:
             reel_data = f.read()
@@ -654,9 +684,10 @@ if __name__ == "__main__":
         )
         reel_url = sb.storage.from_("social-images").get_public_url(f"{post_id}/reel.mp4")
         sb.table("social_posts").update({
-            "slide_urls":   slide_urls,
-            "fb_cover_url": fb_cover_url,
-            "reel_url":     reel_url,
+            "slide_urls":      slide_urls,
+            "fb_cover_url":    fb_cover_url,
+            "story_cover_url": story_cover_url,
+            "reel_url":        reel_url,
         }).eq("id", post_id).execute()
         print(f"      {len(slide_urls)} IG slides + 1 FB cover + 1 Reel MP4 uploaded")
 

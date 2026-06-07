@@ -97,48 +97,34 @@ def post_instagram_carousel(slide_urls: list[str], caption: str) -> str:
     })
     return result["id"]
 
-# ── Instagram Stories ─────────────────────────────────────────────────────────
-def post_instagram_stories(slide_urls: list[str]) -> list[str]:
-    """Post all slides as individual Instagram Stories."""
-    published_ids = []
-    for i, url in enumerate(slide_urls):
-        # Create story container
-        container = graph_post(f"{IG_ACCOUNT_ID}/media", {
-            "image_url":    url,
-            "media_type":   "STORIES",
-            "access_token": FB_PAGE_TOKEN,
-        })
-        container_id = container["id"]
-        # Wait for processing
-        for _ in range(10):
-            time.sleep(3)
-            status = graph_get(container_id, {"fields": "status_code", "access_token": FB_PAGE_TOKEN})
-            if status.get("status_code") == "FINISHED":
-                break
-        # Publish
-        result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
-            "creation_id":  container_id,
-            "access_token": FB_PAGE_TOKEN,
-        })
-        published_ids.append(result["id"])
-        print(f"  Story {i+1}/{len(slide_urls)} posted: {result['id']}")
-        time.sleep(2)
-    return published_ids
+# ── Instagram Story (1 cover verticale 1080x1920) ────────────────────────────
+def post_instagram_story(story_cover_url: str) -> str:
+    """Post single vertical cover (1080x1920) as Instagram Story."""
+    container = graph_post(f"{IG_ACCOUNT_ID}/media", {
+        "image_url":    story_cover_url,
+        "media_type":   "STORIES",
+        "access_token": FB_PAGE_TOKEN,
+    })
+    cid = container["id"]
+    for _ in range(10):
+        time.sleep(3)
+        status = graph_get(cid, {"fields": "status_code", "access_token": FB_PAGE_TOKEN})
+        if status.get("status_code") == "FINISHED":
+            break
+    result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
+        "creation_id":  cid,
+        "access_token": FB_PAGE_TOKEN,
+    })
+    return result["id"]
 
-# ── Facebook Stories ───────────────────────────────────────────────────────────
-def post_facebook_stories(slide_urls: list[str]) -> list[str]:
-    """Post all slides as individual Facebook Stories."""
-    published_ids = []
-    for i, url in enumerate(slide_urls):
-        result = graph_post(f"{FB_PAGE_ID}/photo_stories", {
-            "url":          url,
-            "access_token": FB_PAGE_TOKEN,
-        })
-        story_id = result.get("post_id", result.get("id", ""))
-        published_ids.append(story_id)
-        print(f"  FB Story {i+1}/{len(slide_urls)} posted: {story_id}")
-        time.sleep(2)
-    return published_ids
+# ── Facebook Story (1 cover verticale 1080x1920) ──────────────────────────────
+def post_facebook_story(story_cover_url: str) -> str:
+    """Post single vertical cover (1080x1920) as Facebook Story."""
+    result = graph_post(f"{FB_PAGE_ID}/photo_stories", {
+        "photo": story_cover_url,
+        "access_token": FB_PAGE_TOKEN,
+    })
+    return result.get("post_id", result.get("id", ""))
 
 # ── Facebook post ─────────────────────────────────────────────────────────────
 def build_fb_message(text: str, article_url: str, journal: str = "") -> str:
@@ -208,11 +194,10 @@ if __name__ == "__main__":
     fb_post_id   = post.get("fb_post_id")
     do_instagram = post.get("ig_approved") or post.get("approved")
     do_facebook  = post.get("fb_approved") or post.get("approved")
-    do_ig_story        = post.get("ig_story_approved", False)
-    do_fb_story        = post.get("fb_story_approved", False)
-    do_ig_story_video  = post.get("ig_story_video_approved", False)
-    do_fb_story_video  = post.get("fb_story_video_approved", False)
-    reel_url           = post.get("reel_url", "")
+    do_ig_story       = post.get("ig_story_approved", False)
+    do_fb_story       = post.get("fb_story_approved", False)
+    reel_url          = post.get("reel_url", "")
+    story_cover_url   = post.get("story_cover_url") or slide_urls[0]
 
     # Post to Instagram (skip if already done or not approved)
     if not ig_post_id and do_instagram:
@@ -238,23 +223,23 @@ if __name__ == "__main__":
     else:
         print(f"\n[2/4] Facebook already posted — skipping")
 
-    # Instagram Stories
+    # Instagram Story (1 cover verticale)
     if do_ig_story:
         try:
-            print(f"\n[3/4] Posting {len(slide_urls)} Instagram Stories...")
-            post_instagram_stories(slide_urls)
-            print(f"  ✓ Instagram Stories posted")
+            print(f"\n[3/4] Posting Instagram Story (1080x1920)...")
+            ig_story_id = post_instagram_story(story_cover_url)
+            print(f"  ✓ Instagram Story posted: {ig_story_id}")
         except Exception as e:
-            print(f"  ✗ Instagram Stories error: {e}")
+            print(f"  ✗ Instagram Story error: {e}")
 
-    # Facebook Stories
+    # Facebook Story (1 cover verticale)
     if do_fb_story:
         try:
-            print(f"\n[4/6] Posting {len(slide_urls)} Facebook Stories...")
-            post_facebook_stories(slide_urls)
-            print(f"  ✓ Facebook Stories posted")
+            print(f"\n[4/4] Posting Facebook Story (1080x1920)...")
+            fb_story_id = post_facebook_story(story_cover_url)
+            print(f"  ✓ Facebook Story posted: {fb_story_id}")
         except Exception as e:
-            print(f"  ✗ Facebook Stories error: {e}")
+            print(f"  ✗ Facebook Story error: {e}")
 
     # Instagram Story Video (MP4)
     if do_ig_story_video and reel_url:
