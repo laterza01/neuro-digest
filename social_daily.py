@@ -68,8 +68,8 @@ def fetch_fresh_articles() -> list[dict]:
             })
     return articles
 
-def get_existing_notion_urls() -> set:
-    """Get all URLs already saved in Notion to avoid duplicates."""
+def get_existing_notion_keys() -> tuple[set, set]:
+    """Get existing URLs and title prefixes from Notion to avoid duplicates."""
     notion_token = os.getenv("NOTION_TOKEN", "")
     notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
     req = urllib.request.Request(
@@ -81,7 +81,10 @@ def get_existing_notion_urls() -> set:
     )
     with urllib.request.urlopen(req, timeout=30) as r:
         results = json.loads(r.read()).get("results", [])
-    return {p["properties"].get("URL", {}).get("url", "") for p in results if p["properties"].get("URL", {}).get("url")}
+    urls   = {p["properties"].get("URL", {}).get("url", "") for p in results}
+    titles = {"".join(t["plain_text"] for t in p["properties"]["Nome"]["title"])[:50].lower()
+              for p in results}
+    return urls, titles
 
 def save_all_to_notion(articles: list[dict], existing_urls: set) -> list[dict]:
     """Save all new articles to Notion. Returns articles with notion_id filled in."""
@@ -646,9 +649,13 @@ if __name__ == "__main__":
         print("No articles found — exiting.")
         sys.exit(0)
 
-    print("      Checking existing Notion URLs (no duplicates)...")
-    existing_urls = get_existing_notion_urls()
-    new_articles = [a for a in fresh if a["url"] not in existing_urls]
+    print("      Checking existing Notion entries (no duplicates)...")
+    existing_urls, existing_titles = get_existing_notion_keys()
+    new_articles = [
+        a for a in fresh
+        if a["url"] not in existing_urls
+        and a["title"][:50].lower() not in existing_titles
+    ]
     print(f"      {len(new_articles)} new articles to save to Notion")
 
     if new_articles:
