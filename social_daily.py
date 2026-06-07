@@ -335,16 +335,46 @@ body{{width:1080px;height:1920px;background:#1a1a2e;display:flex;flex-direction:
             color:rgba(255,255,255,.25)">neuro-digest.com</div>
 </body></html>"""
 
-# ── 4a. Generate MP4 Reel from PNG slides ────────────────────────────────────
-def generate_reel_mp4(slide_paths: list[Path], out_dir: Path, seconds_per_slide: int = 3) -> Path:
-    """Stitch PNG slides into an MP4 video at 3 sec/slide for Instagram Reel."""
+# ── 4a. Render vertical slides 1080x1920 for Reel ────────────────────────────
+def render_vertical_slides(slides: list[dict], out_dir: Path) -> list[Path]:
+    """Render slides at 1080x1920 (vertical) for the Reel MP4."""
+    paths = []
+    total = len(slides)
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page    = browser.new_page(viewport={"width": 1080, "height": 1920})
+        for i, slide in enumerate(slides):
+            # Build vertical version of each slide
+            html = build_slide_html_vertical(slide, i, total)
+            page.set_content(html, wait_until="networkidle")
+            path = out_dir / f"reel_slide_{i+1:02d}.png"
+            page.screenshot(path=str(path), full_page=False)
+            paths.append(path)
+        browser.close()
+    print(f"  {total} vertical slides rendered (1080x1920)")
+    return paths
+
+def build_slide_html_vertical(slide: dict, idx: int, total: int) -> str:
+    """Same content as square slides but at 1080x1920."""
+    # Replace 1080px/1080px with 1080px/1920px in the standard HTML
+    html = build_slide_html(slide, idx, total, show_dots=False)
+    html = html.replace("width:1080px;height:1080px", "width:1080px;height:1920px")
+    # More padding for vertical
+    html = html.replace("padding:72px 64px", "padding:160px 80px")
+    html = html.replace("padding:80px 80px", "padding:160px 80px")
+    html = html.replace("padding:80px;", "padding:160px 80px;")
+    return html
+
+# ── 4b. Generate MP4 Reel 1080x1920 ──────────────────────────────────────────
+def generate_reel_mp4(vertical_slide_paths: list[Path], out_dir: Path, seconds_per_slide: int = 4) -> Path:
+    """Stitch vertical PNG slides into a 1080x1920 MP4 at 4 sec/slide."""
     from moviepy import ImageClip, concatenate_videoclips
-    clips = [ImageClip(str(p)).with_duration(seconds_per_slide) for p in slide_paths]
+    clips = [ImageClip(str(p)).with_duration(seconds_per_slide) for p in vertical_slide_paths]
     video  = concatenate_videoclips(clips, method="compose")
     output = out_dir / "reel.mp4"
     video.write_videofile(str(output), fps=30, codec="libx264",
                           audio=False, logger=None)
-    print(f"  Reel MP4 generated: {output.name} ({len(slide_paths)} slides × {seconds_per_slide}s)")
+    print(f"  Reel MP4: {len(vertical_slide_paths)} slides × {seconds_per_slide}s = {len(vertical_slide_paths)*seconds_per_slide}s total")
     return output
 
 # ── 4b. Render PNG ────────────────────────────────────────────────────────────
@@ -657,8 +687,11 @@ if __name__ == "__main__":
         print("\n[3/6] Rendering slides to PNG...")
         slide_paths, fb_cover_path, story_cover_path = render_slides(content["slides"], tmp_path)
 
-        print("\n[3b] Generating Reel MP4...")
-        reel_path = generate_reel_mp4(slide_paths, tmp_path)
+        print("\n[3b] Rendering vertical slides (1080x1920) for Reel...")
+        vertical_paths = render_vertical_slides(content["slides"], tmp_path)
+
+        print("\n[3c] Generating Reel MP4 (1080x1920, 4 sec/slide)...")
+        reel_path = generate_reel_mp4(vertical_paths, tmp_path)
 
         print("\n[4/6] Saving post to Supabase...")
         row = sb.table("social_posts").insert({
