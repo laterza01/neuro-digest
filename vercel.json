@@ -2,6 +2,8 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": ".",
+  "cleanUrls": true,
+  "trailingSlash": false,
   "rewrites": [
     { "source": "/preferences",  "destination": "/preferences.html" },
     { "source": "/success",      "destination": "/success.html" },
