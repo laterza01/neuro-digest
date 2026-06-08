@@ -3,8 +3,10 @@
   "buildCommand": "",
   "outputDirectory": ".",
   "rewrites": [
-    { "source": "/preferences",          "destination": "/preferences.html" },
-    { "source": "/success",              "destination": "/success.html" }
+    { "source": "/preferences",  "destination": "/preferences.html" },
+    { "source": "/success",      "destination": "/success.html" },
+    { "source": "/privacy",      "destination": "/privacy.html" },
+    { "source": "/unsubscribe",  "destination": "/unsubscribe.html" }
   ],
   "crons": [
     { "path": "/api/trigger_preview", "schedule": "0 18 * * 0" },

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unsubscribe — NeuroDigest</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Helvetica,Arial,sans-serif;background:#f4f3f0;color:#2c2c2c;
+         min-height:100vh;display:flex;flex-direction:column}
+    header{background:#1a1a2e;padding:24px 32px;display:flex;align-items:center;justify-content:space-between}
+    header a.brand{font-family:Georgia,serif;font-size:22px;color:#fff;text-decoration:none}
+    header a.back{font-size:13px;color:rgba(255,255,255,.5);text-decoration:none}
+    header a.back:hover{color:#fff}
+    main{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px}
+    .card{background:#fff;max-width:480px;width:100%;padding:48px 40px;border-top:4px solid #c0392b;text-align:center;border-radius:4px}
+    h1{font-family:Georgia,serif;font-size:26px;color:#1a1a2e;margin-bottom:12px}
+    p{font-size:15px;color:#555;line-height:1.6;margin-bottom:28px}
+    input[type=email]{width:100%;padding:14px 16px;border:1px solid #ddd;border-radius:2px;
+                      font-size:15px;outline:none;margin-bottom:16px}
+    input[type=email]:focus{border-color:#c0392b}
+    button{width:100%;padding:14px;background:#c0392b;color:#fff;border:none;
+           font-size:15px;font-weight:700;cursor:pointer;border-radius:2px;letter-spacing:.02em}
+    button:hover{background:#a93226}
+    button:disabled{background:#ccc;cursor:not-allowed}
+    .msg{margin-top:20px;font-size:14px;padding:14px;border-radius:2px;display:none}
+    .msg.success{background:#f0f7f0;color:#0e7c5a;display:block}
+    .msg.error{background:#fff0f0;color:#c0392b;display:block}
+    .reason{display:block;padding:10px 14px;margin-bottom:8px;border:1px solid #eee;border-radius:4px;
+             font-size:14px;color:#333;cursor:pointer;transition:border-color .15s}
+    .reason:hover{border-color:#c0392b}
+    .reason input{margin-right:10px;accent-color:#c0392b}
+    footer{text-align:center;padding:24px;font-size:12px;color:#888}
+    footer a{color:#888;text-decoration:none}
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="brand" href="/">NeuroDigest</a>
+  <a class="back" href="/">← Back to home</a>
+</header>
+
+<main>
+  <div class="card" id="form-card">
+
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:20px">
+      <circle cx="36" cy="36" r="36" fill="#f5ede8"/>
+      <rect x="14" y="23" width="44" height="28" rx="3" fill="#fff" stroke="#ddd" stroke-width="1"/>
+      <path d="M14 26l22 15 22-15" stroke="#c0392b" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="14" y1="51" x2="27" y2="39" stroke="#ddd" stroke-width="1.5"/>
+      <line x1="58" y1="51" x2="45" y2="39" stroke="#ddd" stroke-width="1.5"/>
+    </svg>
+
+    <h1>Sorry to see you go</h1>
+    <p>We're sad to see you leave. Before you go, would you mind telling us why? It helps us improve NeuroDigest.</p>
+
+    <div style="text-align:left;margin:0 0 20px">
+      <label class="reason"><input type="radio" name="reason" value="too_many"> Too many emails</label>
+      <label class="reason"><input type="radio" name="reason" value="not_relevant"> Content not relevant to me</label>
+      <label class="reason"><input type="radio" name="reason" value="no_longer_practice"> I no longer practice neurology</label>
+      <label class="reason"><input type="radio" name="reason" value="too_technical"> Too technical / not technical enough</label>
+      <label class="reason"><input type="radio" name="reason" value="found_better"> I found a better resource</label>
+      <label class="reason"><input type="radio" name="reason" value="never_signed"> I never signed up for this</label>
+      <label class="reason"><input type="radio" name="reason" value="other"> Other</label>
+    </div>
+
+    <input type="email" id="email" placeholder="your@email.com" autocomplete="email">
+    <button id="btn" onclick="doUnsubscribe()">Unsubscribe</button>
+    <div class="msg" id="msg"></div>
+  </div>
+</main>
+
+<footer>
+  &copy; 2026 NeuroDigest · <a href="/">Home</a> · <a href="/privacy">Privacy</a>
+</footer>
+
+<script>
+async function doUnsubscribe() {
+  const email = document.getElementById('email').value.trim();
+  const btn   = document.getElementById('btn');
+  const msg   = document.getElementById('msg');
+
+  if (!email || !email.includes('@')) {
+    msg.className = 'msg error';
+    msg.textContent = 'Please enter a valid email address.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+  msg.className = 'msg';
+
+  try {
+    const res = await fetch('/api/unsubscribe_email', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      document.getElementById('form-card').innerHTML = `
+        <div style="font-size:48px;margin-bottom:16px">✅</div>
+        <h1 style="font-family:Georgia,serif;font-size:26px;color:#1a1a2e;margin-bottom:12px">Done</h1>
+        <p style="font-size:15px;color:#555;line-height:1.6">
+          <strong>${email}</strong> has been removed from NeuroDigest.<br><br>
+          We're sorry to see you go. If you change your mind, you can always
+          <a href="/" style="color:#c0392b">subscribe again</a>.
+        </p>`;
+    } else {
+      msg.className = 'msg error';
+      msg.textContent = data.error || 'Something went wrong. Please try again.';
+      btn.disabled = false;
+      btn.textContent = 'Confirm Unsubscribe';
+    }
+  } catch(e) {
+    msg.className = 'msg error';
+    msg.textContent = 'Connection error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Confirm Unsubscribe';
+  }
+}
+
+document.getElementById('email').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doUnsubscribe();
+});
+</script>
+</body>
+</html>
