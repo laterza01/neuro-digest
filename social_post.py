@@ -201,6 +201,8 @@ if __name__ == "__main__":
 
     ig_post_id   = post.get("ig_post_id")
     fb_post_id   = post.get("fb_post_id")
+    ig_story_id  = post.get("ig_story_id")
+    fb_story_id  = post.get("fb_story_id")
     do_instagram = post.get("ig_approved") or post.get("approved")
     do_facebook  = post.get("fb_approved") or post.get("approved")
     do_ig_story       = post.get("ig_story_approved", False)
@@ -232,23 +234,29 @@ if __name__ == "__main__":
     else:
         print(f"\n[2/4] Facebook already posted — skipping")
 
-    # Instagram Story (1 cover verticale)
-    if do_ig_story:
+    # Instagram Story (1 cover verticale) — skip if already posted
+    if do_ig_story and not ig_story_id:
         try:
             print(f"\n[3/4] Posting Instagram Story (1080x1920)...")
             ig_story_id = post_instagram_story(story_cover_url)
             print(f"  ✓ Instagram Story posted: {ig_story_id}")
+            sb.table("social_posts").update({"ig_story_id": ig_story_id}).eq("id", post_id).execute()
         except Exception as e:
             print(f"  ✗ Instagram Story error: {e}")
+    elif ig_story_id:
+        print(f"\n[3/4] Instagram Story already posted — skipping")
 
-    # Facebook Story (1 cover verticale)
-    if do_fb_story:
+    # Facebook Story (1 cover verticale) — skip if already posted
+    if do_fb_story and not fb_story_id:
         try:
             print(f"\n[4/4] Posting Facebook Story (1080x1920)...")
             fb_story_id = post_facebook_story(story_cover_url)
             print(f"  ✓ Facebook Story posted: {fb_story_id}")
+            sb.table("social_posts").update({"fb_story_id": fb_story_id}).eq("id", post_id).execute()
         except Exception as e:
             print(f"  ✗ Facebook Story error: {e}")
+    elif fb_story_id:
+        print(f"\n[4/4] Facebook Story already posted — skipping")
 
     # Instagram Story Video (MP4)
     if do_ig_story_video and reel_url:
