@@ -700,19 +700,20 @@ def save_articles_to_notion(digest_data: dict) -> int:
     saved = 0
 
     for section in digest_data.get("sections", []):
-        topic = section.get("topic", "Other")
-        for theme in section.get("themes", []):
-            for source in theme.get("sources", []):
-                title   = source.get("title", "").strip()
-                journal = source.get("journal", "").strip()
-                url     = source.get("url", "") or ""
-                doi     = source.get("doi", "")
-                if doi and not url:
-                    url = f"https://doi.org/{doi}"
-                summary = theme.get("body", "")[:2000]
+        topic    = section.get("topic", "Other")
+        # sources are at section level, themes contain the body text
+        themes_body = " ".join(t.get("body", "") for t in section.get("themes", []))[:2000]
+        for source in section.get("sources", []):
+            title   = source.get("title", "").strip()
+            journal = source.get("journal", "").strip()
+            url     = source.get("url", "") or ""
+            doi     = source.get("doi", "")
+            if doi and not url:
+                url = f"https://doi.org/{doi}"
+            summary = themes_body
 
-                if not title:
-                    continue
+            if not title:
+                continue
 
                 # Map topic to Notion select option
                 topic_map = {
