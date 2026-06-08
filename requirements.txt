@@ -9,3 +9,4 @@ tzdata>=2024.1
 stripe>=8.0.0
 playwright
 moviepy
+feedparser
