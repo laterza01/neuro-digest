@@ -1612,7 +1612,7 @@ def run(generate_only: bool = False):
     eligible = list(all_subscribers)
 
     # ── Check approval flag ───────────────────────────────────────────────────
-    if not is_last_monday_of_month():
+    if not generate_only and not is_last_monday_of_month():
         try:
             rows = (
                 sb.table("digests")
