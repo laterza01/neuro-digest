@@ -3,6 +3,7 @@
   "buildCommand": "",
   "outputDirectory": ".",
   "rewrites": [
+    { "source": "/",             "destination": "/index.html" },
     { "source": "/preferences",  "destination": "/preferences.html" },
     { "source": "/success",      "destination": "/success.html" },
     { "source": "/privacy",      "destination": "/privacy.html" },
