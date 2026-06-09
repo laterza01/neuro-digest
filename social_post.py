@@ -170,12 +170,13 @@ def build_caption(post: dict) -> str:
 if __name__ == "__main__":
     print("=== NeuroDigest Social Post ===")
 
-    # Fetch posts where at least one platform is approved and not yet posted
+    # Fetch posts where at least one platform was EXPLICITLY approved by the user
+    # NOTE: 'approved' (old field) is ignored — only ig_approved and fb_approved count
     rows = (
         sb.table("social_posts")
           .select("*")
           .is_("posted_at", "null")
-          .or_("approved.eq.true,ig_approved.eq.true,fb_approved.eq.true")
+          .or_("ig_approved.eq.true,fb_approved.eq.true,ig_story_approved.eq.true,fb_story_approved.eq.true")
           .order("created_at", desc=True)
           .limit(1)
           .execute()
@@ -203,8 +204,8 @@ if __name__ == "__main__":
     fb_post_id   = post.get("fb_post_id")
     ig_story_id  = post.get("ig_story_id")
     fb_story_id  = post.get("fb_story_id")
-    do_instagram = post.get("ig_approved") or post.get("approved")
-    do_facebook  = post.get("fb_approved") or post.get("approved")
+    do_instagram = bool(post.get("ig_approved"))
+    do_facebook  = bool(post.get("fb_approved"))
     do_ig_story       = post.get("ig_story_approved", False)
     do_fb_story       = post.get("fb_story_approved", False)
     reel_url          = post.get("reel_url", "")

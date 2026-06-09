@@ -649,11 +649,40 @@ if __name__ == "__main__":
         print("No articles found — exiting.")
         sys.exit(0)
 
+    # Get recently posted article URLs (last 7 days) to avoid repeating content
+    recent_posts = sb.table("social_posts").select("article_url").not_.is_("posted_at", "null").order("created_at", desc=True).limit(14).execute()
+    recently_posted_urls = {r["article_url"] for r in (recent_posts.data or []) if r.get("article_url")}
+    print(f"      {len(recently_posted_urls)} recently posted URLs excluded")
+
     print("      Checking existing Notion entries (no duplicates)...")
     existing_urls, existing_titles = get_existing_notion_keys()
+    # Get Notion articles already used for Social to avoid re-saving
+    used_notion_urls = set()
+    try:
+        notion_token = os.getenv("NOTION_TOKEN", "")
+        notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+        filter_used = {"filter": {"and": [
+            {"property": "Status", "select": {"equals": "Used"}},
+            {"property": "Use for", "multi_select": {"contains": "Social"}},
+        ]}, "page_size": 100}
+        req = urllib.request.Request(
+            f"https://api.notion.com/v1/databases/{notion_db_id}/query",
+            data=json.dumps(filter_used).encode(),
+            headers={"Authorization": f"Bearer {notion_token}",
+                     "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req) as r:
+            for p in json.loads(r.read()).get("results", []):
+                url = p["properties"].get("URL", {}).get("url", "")
+                if url:
+                    used_notion_urls.add(url)
+    except Exception:
+        pass
+
     new_articles = [
         a for a in fresh
         if a["url"] not in existing_urls
+        and a["url"] not in used_notion_urls
         and a["title"][:50].lower() not in existing_titles
     ]
     print(f"      {len(new_articles)} new articles to save to Notion")
@@ -664,11 +693,14 @@ if __name__ == "__main__":
     else:
         print("      All articles already in Notion")
 
-    # All fresh articles (with notion_id if newly saved, empty if already existed)
-    articles = fresh
+    # Exclude recently posted articles from candidate pool
+    articles = [a for a in fresh if a["url"] not in recently_posted_urls]
+    if not articles:
+        print("All fresh articles were recently posted — extending search to 7 days...")
+        articles = fresh  # fallback: use all anyway
     for a in articles:
         if not a.get("notion_id"):
-            a["notion_id"] = ""  # will be set properly after matching
+            a["notion_id"] = ""
 
     print("\n[2/6] Generating carousel with Claude...")
     content = generate_content(articles)
