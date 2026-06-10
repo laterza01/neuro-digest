@@ -213,6 +213,9 @@ if __name__ == "__main__":
     reel_url          = post.get("reel_url", "")
     story_cover_url   = post.get("story_cover_url") or slide_urls[0]
 
+    # Track if any post was actually published
+    something_posted = False
+
     # Post to Instagram (skip if already done or not approved)
     if not ig_post_id and do_instagram:
         try:
@@ -220,10 +223,12 @@ if __name__ == "__main__":
             caption    = build_caption(post)
             ig_post_id = post_instagram_carousel(slide_urls, caption)
             print(f"  ✓ Instagram post ID: {ig_post_id}")
+            something_posted = True
         except Exception as e:
             print(f"  ✗ Instagram error: {e}")
     else:
-        print(f"\n[1/2] Instagram already posted ({ig_post_id}) — skipping")
+        if ig_post_id:
+            print(f"\n[1/2] Instagram already posted ({ig_post_id}) — skipping")
 
     # Post to Facebook (skip if already done or not approved)
     if not fb_post_id and do_facebook:
@@ -232,10 +237,12 @@ if __name__ == "__main__":
             fb_cover = post.get("fb_cover_url") or slide_urls[0]
             fb_post_id = post_facebook(fb_cover, fb_text, post["article_url"], post.get("journal", ""))
             print(f"  ✓ Facebook post ID: {fb_post_id}")
+            something_posted = True
         except Exception as e:
             print(f"  ✗ Facebook error: {e}")
     else:
-        print(f"\n[2/4] Facebook already posted — skipping")
+        if fb_post_id:
+            print(f"\n[2/4] Facebook already posted — skipping")
 
     # Instagram Story (1 cover verticale) — skip if already posted
     if do_ig_story and not ig_story_id:
@@ -244,6 +251,7 @@ if __name__ == "__main__":
             ig_story_id = post_instagram_story(story_cover_url)
             print(f"  ✓ Instagram Story posted: {ig_story_id}")
             sb.table("social_posts").update({"ig_story_id": ig_story_id}).eq("id", post_id).execute()
+            something_posted = True
         except Exception as e:
             print(f"  ✗ Instagram Story error: {e}")
     elif ig_story_id:
@@ -256,6 +264,7 @@ if __name__ == "__main__":
             fb_story_id = post_facebook_story(story_cover_url)
             print(f"  ✓ Facebook Story posted: {fb_story_id}")
             sb.table("social_posts").update({"fb_story_id": fb_story_id}).eq("id", post_id).execute()
+            something_posted = True
         except Exception as e:
             print(f"  ✗ Facebook Story error: {e}")
     elif fb_story_id:
@@ -280,6 +289,7 @@ if __name__ == "__main__":
                 "creation_id": cid, "access_token": FB_PAGE_TOKEN
             })
             print(f"  ✓ Instagram Story Video posted: {result['id']}")
+            something_posted = True
         except Exception as e:
             print(f"  ✗ Instagram Story Video error: {e}")
 
@@ -293,15 +303,19 @@ if __name__ == "__main__":
                 "access_token": FB_PAGE_TOKEN,
             })
             print(f"  ✓ Facebook Story Video posted: {result.get('post_id','')}")
+            something_posted = True
         except Exception as e:
             print(f"  ✗ Facebook Story Video error: {e}")
 
-    # Update Supabase
-    sb.table("social_posts").update({
-        "posted_at":  datetime.now(timezone.utc).isoformat(),
+    # Update Supabase — only set posted_at if something was actually published
+    update_data = {
         "ig_post_id": ig_post_id,
         "fb_post_id": fb_post_id,
-    }).eq("id", post_id).execute()
+    }
+    if something_posted:
+        update_data["posted_at"] = datetime.now(timezone.utc).isoformat()
+
+    sb.table("social_posts").update(update_data).eq("id", post_id).execute()
 
     # Update Notion: status=Used, use_for keeps existing values + ensures "Social"
     if post.get("notion_page_id"):
