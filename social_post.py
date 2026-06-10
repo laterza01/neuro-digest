@@ -204,10 +204,12 @@ if __name__ == "__main__":
     fb_post_id   = post.get("fb_post_id")
     ig_story_id  = post.get("ig_story_id")
     fb_story_id  = post.get("fb_story_id")
-    do_instagram = bool(post.get("ig_approved"))
-    do_facebook  = bool(post.get("fb_approved"))
-    do_ig_story       = post.get("ig_story_approved", False)
-    do_fb_story       = post.get("fb_story_approved", False)
+    do_instagram      = bool(post.get("ig_approved"))
+    do_facebook       = bool(post.get("fb_approved"))
+    do_ig_story       = bool(post.get("ig_story_approved"))
+    do_fb_story       = bool(post.get("fb_story_approved"))
+    do_ig_story_video = bool(post.get("ig_story_video_approved"))
+    do_fb_story_video = bool(post.get("fb_story_video_approved"))
     reel_url          = post.get("reel_url", "")
     story_cover_url   = post.get("story_cover_url") or slide_urls[0]
 

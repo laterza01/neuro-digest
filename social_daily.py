@@ -72,18 +72,39 @@ def get_existing_notion_keys() -> tuple[set, set]:
     """Get existing URLs and title prefixes from Notion to avoid duplicates."""
     notion_token = os.getenv("NOTION_TOKEN", "")
     notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
-    req = urllib.request.Request(
-        f"https://api.notion.com/v1/databases/{notion_db_id}/query",
-        data=json.dumps({"page_size": 100}).encode(),
-        headers={"Authorization": f"Bearer {notion_token}",
-                 "Notion-Version": "2022-06-28",
-                 "Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        results = json.loads(r.read()).get("results", [])
-    urls   = {p["properties"].get("URL", {}).get("url", "") for p in results}
-    titles = {"".join(t["plain_text"] for t in p["properties"]["Nome"]["title"])[:50].lower()
-              for p in results}
+
+    urls = set()
+    titles = set()
+    has_more = True
+    start_cursor = None
+
+    while has_more:
+        payload = {"page_size": 100}
+        if start_cursor:
+            payload["start_cursor"] = start_cursor
+
+        req = urllib.request.Request(
+            f"https://api.notion.com/v1/databases/{notion_db_id}/query",
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {notion_token}",
+                     "Notion-Version": "2022-06-28",
+                     "Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            response = json.loads(r.read())
+
+        results = response.get("results", [])
+        for p in results:
+            url = p["properties"].get("URL", {}).get("url", "")
+            if url:
+                urls.add(url)
+            title = "".join(t["plain_text"] for t in p["properties"].get("Nome", {}).get("title", []))
+            if title:
+                titles.add(title[:50].lower())
+
+        has_more = response.get("has_more", False)
+        start_cursor = response.get("next_cursor")
+
     return urls, titles
 
 def save_all_to_notion(articles: list[dict], existing_urls: set) -> list[dict]:
@@ -457,12 +478,27 @@ def create_notion_article(article: dict) -> str:
         return json.loads(r.read())["id"]
 
 def update_notion_article(notion_id: str) -> None:
-    """Mark existing Notion article as Scheduled + add Social to Use for."""
+    """Mark existing Notion article as Scheduled + ensure Social in Use for (but keep existing values)."""
     notion_token = os.getenv("NOTION_TOKEN", "")
+
+    # First fetch current Use for values
+    get_req = urllib.request.Request(
+        f"https://api.notion.com/v1/pages/{notion_id}",
+        headers={"Authorization": f"Bearer {notion_token}",
+                 "Notion-Version": "2022-06-28"}
+    )
+    with urllib.request.urlopen(get_req) as r:
+        page_data = json.loads(r.read())
+
+    # Preserve existing Use for values and add Social if not present
+    current_use = [o["name"] for o in page_data["properties"].get("Use for", {}).get("multi_select", [])]
+    if "Social" not in current_use:
+        current_use.append("Social")
+
     payload = {
         "properties": {
             "Status":  {"select": {"name": "Scheduled"}},
-            "Use for": {"multi_select": [{"name": "Mail"}, {"name": "Social"}]},
+            "Use for": {"multi_select": [{"name": v} for v in current_use]},
         }
     }
     req = urllib.request.Request(
@@ -693,11 +729,16 @@ if __name__ == "__main__":
     else:
         print("      All articles already in Notion")
 
-    # Exclude recently posted articles from candidate pool
-    articles = [a for a in fresh if a["url"] not in recently_posted_urls]
+    # Get articles that already have pending posts (not yet posted) to avoid re-elaborating
+    pending_posts = sb.table("social_posts").select("article_url").is_("posted_at", "null").execute()
+    pending_urls = {p["article_url"] for p in (pending_posts.data or []) if p.get("article_url")}
+    print(f"      {len(pending_urls)} pending (unapproved) posts exist — will skip if match")
+
+    # Exclude recently posted articles + articles with pending posts
+    articles = [a for a in fresh if a["url"] not in recently_posted_urls and a["url"] not in pending_urls]
     if not articles:
-        print("All fresh articles were recently posted — extending search to 7 days...")
-        articles = fresh  # fallback: use all anyway
+        print("All fresh articles were recently posted or have pending posts — exiting.")
+        sys.exit(0)
     for a in articles:
         if not a.get("notion_id"):
             a["notion_id"] = ""
