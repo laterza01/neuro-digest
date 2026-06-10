@@ -477,11 +477,11 @@ def create_notion_article(article: dict) -> str:
     with urllib.request.urlopen(req) as r:
         return json.loads(r.read())["id"]
 
-def update_notion_article(notion_id: str) -> None:
-    """Mark existing Notion article as Scheduled + ensure Social in Use for (but keep existing values)."""
+def update_notion_status(notion_id: str, status: str, use_for_tags: list = None) -> None:
+    """Update Notion article status. Preserves existing Use for values and adds new ones."""
     notion_token = os.getenv("NOTION_TOKEN", "")
 
-    # First fetch current Use for values
+    # Fetch current Use for values
     get_req = urllib.request.Request(
         f"https://api.notion.com/v1/pages/{notion_id}",
         headers={"Authorization": f"Bearer {notion_token}",
@@ -490,14 +490,16 @@ def update_notion_article(notion_id: str) -> None:
     with urllib.request.urlopen(get_req) as r:
         page_data = json.loads(r.read())
 
-    # Preserve existing Use for values and add Social if not present
+    # Preserve existing Use for values and add new ones if provided
     current_use = [o["name"] for o in page_data["properties"].get("Use for", {}).get("multi_select", [])]
-    if "Social" not in current_use:
-        current_use.append("Social")
+    if use_for_tags:
+        for tag in use_for_tags:
+            if tag not in current_use:
+                current_use.append(tag)
 
     payload = {
         "properties": {
-            "Status":  {"select": {"name": "Scheduled"}},
+            "Status":  {"select": {"name": status}},
             "Use for": {"multi_select": [{"name": v} for v in current_use]},
         }
     }
@@ -513,6 +515,10 @@ def update_notion_article(notion_id: str) -> None:
     )
     with urllib.request.urlopen(req) as r:
         r.read()
+
+def update_notion_article(notion_id: str) -> None:
+    """Mark existing Notion article as Scheduled + ensure Social in Use for."""
+    update_notion_status(notion_id, "Scheduled", ["Social"])
 
 # ── 7. Send two preview emails (Instagram + Facebook) ────────────────────────
 def send_preview(content: dict, slide_urls: list[str], post_id: str):
@@ -758,6 +764,13 @@ if __name__ == "__main__":
         content["article_url"] = matched["url"]   # always use real URL
         content["journal"]     = matched.get("journal", content.get("journal", ""))
         content["notion_id"]   = matched.get("notion_id", "")
+        # Update Notion to mark as Scheduled (selected by Claude)
+        if content["notion_id"]:
+            try:
+                update_notion_status(content["notion_id"], "Scheduled", ["Social"])
+                print(f"      ✓ Notion marked as Scheduled")
+            except Exception as e:
+                print(f"      ⚠ Notion update failed: {e}")
     print(f"      {content['article_title'][:70]}")
     print(f"      URL: {content['article_url']}")
 

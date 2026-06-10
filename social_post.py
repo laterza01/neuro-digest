@@ -317,10 +317,10 @@ if __name__ == "__main__":
 
     sb.table("social_posts").update(update_data).eq("id", post_id).execute()
 
-    # Update Notion: status=Used, use_for keeps existing values + ensures "Social"
-    if post.get("notion_page_id"):
+    # Update Notion: status=Used when something was posted
+    if something_posted and post.get("notion_page_id"):
         notion_token = os.getenv("NOTION_TOKEN", "")
-        # First fetch current use_for values
+        # Fetch current Use for values
         get_req = urllib.request.Request(
             f"https://api.notion.com/v1/pages/{post['notion_page_id']}",
             headers={"Authorization": f"Bearer {notion_token}",
@@ -344,6 +344,6 @@ if __name__ == "__main__":
         )
         with urllib.request.urlopen(req) as r:
             pass
-        print(f"\n✓ Notion: status=Used, use_for={current_use}")
+        print(f"\n✓ Notion updated: status=Used")
 
     print("\n✓ Done!")
