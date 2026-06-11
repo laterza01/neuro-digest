@@ -225,7 +225,12 @@ if __name__ == "__main__":
             print(f"  ✓ Instagram post ID: {ig_post_id}")
             something_posted = True
         except Exception as e:
-            print(f"  ✗ Instagram error: {e}")
+            error_str = str(e)
+            if "403" in error_str and "limit" in error_str.lower():
+                print(f"  ⚠️  Instagram rate limited by Meta (too many requests)")
+                print(f"      Please wait 30-60 minutes and retry")
+            else:
+                print(f"  ✗ Instagram error: {e}")
     else:
         if ig_post_id:
             print(f"\n[1/2] Instagram already posted ({ig_post_id}) — skipping")
@@ -342,8 +347,11 @@ if __name__ == "__main__":
                      "Notion-Version": "2022-06-28",
                      "Content-Type":   "application/json"}
         )
-        with urllib.request.urlopen(req) as r:
-            pass
-        print(f"\n✓ Notion updated: status=Used")
+        try:
+            with urllib.request.urlopen(req) as r:
+                pass
+            print(f"\n✓ Notion updated: status=Used")
+        except Exception as e:
+            print(f"\n⚠️  Notion update failed: {e}")
 
     print("\n✓ Done!")
