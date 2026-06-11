@@ -684,14 +684,26 @@ def send_reel_email(content: dict, reel_url: str):
 if __name__ == "__main__":
     print("=== NeuroDigest Social Daily ===")
 
-    # CRITICAL: Check if we already created a post today (max 1 per day)
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    today_posts = sb.table("social_posts").select("id,article_title").gte("created_at", today_start).execute()
-    if today_posts.data:
-        print(f"⚠️  Already created {len(today_posts.data)} post(s) today:")
-        for p in today_posts.data:
-            print(f"   - {p['article_title'][:70]}")
-        print("Max 1 post per day — exiting.")
+    # CRITICAL: Check if we already have a PENDING (unapproved) post from today or recently
+    # This prevents multiple emails about unapproved articles
+    pending_today = (
+        sb.table("social_posts")
+          .select("id,article_title,article_url,created_at")
+          .is_("posted_at", "null")
+          .order("created_at", desc=True)
+          .limit(5)
+          .execute()
+    )
+
+    if pending_today.data:
+        print(f"⚠️  PENDING POSTS EXIST (not yet approved):")
+        for p in pending_today.data:
+            created = datetime.fromisoformat(p["created_at"])
+            hours_ago = (datetime.now(timezone.utc) - created).total_seconds() / 3600
+            status = "TODAY" if hours_ago < 24 else f"{int(hours_ago)}h ago"
+            print(f"   - [{status}] {p['article_title'][:60]}")
+        print("\n💡 RULE: Only 1 pending post at a time. Approve or reject before new posts are created.")
+        print("Exiting to prevent email loop.")
         sys.exit(0)
 
     print("\n[1/6] Fetching fresh articles from PubMed...")
@@ -701,7 +713,7 @@ if __name__ == "__main__":
         print("No articles found — exiting.")
         sys.exit(0)
 
-    # Get recently posted article URLs (last 21 days to be extra safe) to avoid repeating content
+    # Get recently posted article URLs (last 21 days) to avoid repeating content
     recent_posts = sb.table("social_posts").select("article_url").not_.is_("posted_at", "null").order("created_at", desc=True).limit(30).execute()
     recently_posted_urls = {r["article_url"] for r in (recent_posts.data or []) if r.get("article_url")}
     print(f"      {len(recently_posted_urls)} recently posted URLs excluded")
@@ -754,22 +766,6 @@ if __name__ == "__main__":
     articles = [a for a in fresh if a["url"] not in recently_posted_urls and a["url"] not in pending_urls]
     if not articles:
         print("All fresh articles were recently posted or have pending posts — exiting.")
-        print(f"   Recently posted: {len(recently_posted_urls)}")
-        print(f"   Pending (unapproved): {len(pending_urls)}")
-
-        # Cleanup: if we have OLD pending posts (>7 days), mark them as abandoned
-        old_pending = sb.table("social_posts").select("id,article_title,created_at").is_("posted_at", "null").execute()
-        old_count = 0
-        for post in (old_pending.data or []):
-            created = datetime.fromisoformat(post["created_at"])
-            age_days = (datetime.now(timezone.utc) - created).days
-            if age_days > 7:
-                # This post is >7 days old and still not posted — likely abandoned
-                print(f"   Found abandoned post (>{age_days} days): {post['article_title'][:60]}")
-                old_count += 1
-        if old_count > 0:
-            print(f"   {old_count} old pending posts found — consider cleaning up")
-
         sys.exit(0)
     for a in articles:
         if not a.get("notion_id"):
@@ -791,19 +787,6 @@ if __name__ == "__main__":
         content["journal"]     = matched.get("journal", content.get("journal", ""))
         content["notion_id"]   = matched.get("notion_id", "")
 
-        # SAFETY CHECK: Verify article is not in recently_posted_urls or pending_urls
-        if content["article_url"] in recently_posted_urls:
-            print(f"❌ ERROR: Article was recently posted! URL in recently_posted_urls")
-            print(f"   Title: {content['article_title'][:70]}")
-            print(f"   URL: {content['article_url']}")
-            print("Aborting to prevent duplicate posting.")
-            sys.exit(1)
-        if content["article_url"] in pending_urls:
-            print(f"❌ ERROR: Article already has a pending post! URL in pending_urls")
-            print(f"   Title: {content['article_title'][:70]}")
-            print("Aborting to prevent duplicate posting.")
-            sys.exit(1)
-
         # Update Notion to mark as Scheduled (selected by Claude)
         if content["notion_id"]:
             try:
@@ -811,6 +794,7 @@ if __name__ == "__main__":
                 print(f"      ✓ Notion marked as Scheduled")
             except Exception as e:
                 print(f"      ⚠ Notion update failed: {e}")
+
     print(f"      {content['article_title'][:70]}")
     print(f"      URL: {content['article_url']}")
 
@@ -827,6 +811,28 @@ if __name__ == "__main__":
         reel_path = generate_reel_mp4(vertical_paths, tmp_path)
 
         print("\n[4/6] Saving post to Supabase...")
+
+        # CRITICAL CHECK: Prevent duplicate Supabase records for the same article URL
+        existing_record = (
+            sb.table("social_posts")
+              .select("id,posted_at")
+              .eq("article_url", content["article_url"])
+              .execute()
+        )
+
+        if existing_record.data:
+            first_record = existing_record.data[0]
+            if first_record["posted_at"] is None:
+                print(f"❌ DUPLICATE PREVENTION TRIGGERED:")
+                print(f"   Record already exists for this URL (status: PENDING)")
+                print(f"   URL: {content['article_url']}")
+                print(f"   Title: {content['article_title'][:70]}")
+                print(f"\n   Action: Use the existing pending post or delete it before creating a new one.")
+                sys.exit(1)
+            # If posted_at is not null, the record was already posted. This shouldn't happen
+            # but we'll allow it (old posting from previous day)
+            print(f"   ⚠️  Record for this URL was previously posted")
+
         row = sb.table("social_posts").insert({
             "article_title": content["article_title"],
             "article_url":   content["article_url"],

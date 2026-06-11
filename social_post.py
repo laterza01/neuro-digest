@@ -190,22 +190,6 @@ if __name__ == "__main__":
     post_id    = post["id"]
     slide_urls = post["slide_urls"]
     fb_text    = post["fb_text"]
-    article_url = post.get("article_url", "")
-
-    # SAFETY CHECK: Ensure this article hasn't been posted in the last 21 days
-    recent_check = (
-        sb.table("social_posts")
-          .select("id")
-          .eq("article_url", article_url)
-          .not_.is_("posted_at", "null")
-          .execute()
-    )
-    if recent_check.data and len(recent_check.data) > 0:
-        print(f"⚠️  WARNING: This article was already posted {len(recent_check.data)} time(s) recently!")
-        print(f"   Title: {post['article_title'][:70]}")
-        print(f"   URL: {article_url}")
-        print("Aborting to prevent duplicate posting on social media.")
-        sys.exit(1)
 
     print(f"\nPost: {post['article_title'][:60]}")
     print(f"Slides: {len(slide_urls)}")
