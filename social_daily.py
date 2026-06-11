@@ -684,6 +684,16 @@ def send_reel_email(content: dict, reel_url: str):
 if __name__ == "__main__":
     print("=== NeuroDigest Social Daily ===")
 
+    # CRITICAL: Check if we already created a post today (max 1 per day)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    today_posts = sb.table("social_posts").select("id,article_title").gte("created_at", today_start).execute()
+    if today_posts.data:
+        print(f"⚠️  Already created {len(today_posts.data)} post(s) today:")
+        for p in today_posts.data:
+            print(f"   - {p['article_title'][:70]}")
+        print("Max 1 post per day — exiting.")
+        sys.exit(0)
+
     print("\n[1/6] Fetching fresh articles from PubMed...")
     fresh = fetch_fresh_articles()
     print(f"      {len(fresh)} articles found")
@@ -691,8 +701,8 @@ if __name__ == "__main__":
         print("No articles found — exiting.")
         sys.exit(0)
 
-    # Get recently posted article URLs (last 7 days) to avoid repeating content
-    recent_posts = sb.table("social_posts").select("article_url").not_.is_("posted_at", "null").order("created_at", desc=True).limit(14).execute()
+    # Get recently posted article URLs (last 21 days to be extra safe) to avoid repeating content
+    recent_posts = sb.table("social_posts").select("article_url").not_.is_("posted_at", "null").order("created_at", desc=True).limit(30).execute()
     recently_posted_urls = {r["article_url"] for r in (recent_posts.data or []) if r.get("article_url")}
     print(f"      {len(recently_posted_urls)} recently posted URLs excluded")
 
@@ -744,6 +754,22 @@ if __name__ == "__main__":
     articles = [a for a in fresh if a["url"] not in recently_posted_urls and a["url"] not in pending_urls]
     if not articles:
         print("All fresh articles were recently posted or have pending posts — exiting.")
+        print(f"   Recently posted: {len(recently_posted_urls)}")
+        print(f"   Pending (unapproved): {len(pending_urls)}")
+
+        # Cleanup: if we have OLD pending posts (>7 days), mark them as abandoned
+        old_pending = sb.table("social_posts").select("id,article_title,created_at").is_("posted_at", "null").execute()
+        old_count = 0
+        for post in (old_pending.data or []):
+            created = datetime.fromisoformat(post["created_at"])
+            age_days = (datetime.now(timezone.utc) - created).days
+            if age_days > 7:
+                # This post is >7 days old and still not posted — likely abandoned
+                print(f"   Found abandoned post (>{age_days} days): {post['article_title'][:60]}")
+                old_count += 1
+        if old_count > 0:
+            print(f"   {old_count} old pending posts found — consider cleaning up")
+
         sys.exit(0)
     for a in articles:
         if not a.get("notion_id"):
@@ -764,6 +790,20 @@ if __name__ == "__main__":
         content["article_url"] = matched["url"]   # always use real URL
         content["journal"]     = matched.get("journal", content.get("journal", ""))
         content["notion_id"]   = matched.get("notion_id", "")
+
+        # SAFETY CHECK: Verify article is not in recently_posted_urls or pending_urls
+        if content["article_url"] in recently_posted_urls:
+            print(f"❌ ERROR: Article was recently posted! URL in recently_posted_urls")
+            print(f"   Title: {content['article_title'][:70]}")
+            print(f"   URL: {content['article_url']}")
+            print("Aborting to prevent duplicate posting.")
+            sys.exit(1)
+        if content["article_url"] in pending_urls:
+            print(f"❌ ERROR: Article already has a pending post! URL in pending_urls")
+            print(f"   Title: {content['article_title'][:70]}")
+            print("Aborting to prevent duplicate posting.")
+            sys.exit(1)
+
         # Update Notion to mark as Scheduled (selected by Claude)
         if content["notion_id"]:
             try:
