@@ -47,8 +47,10 @@
 - **Claude API** (claude-opus-4-5): Content generation + carousel layout
 - **Notion API**: Article database (integration point)
 - **Meta Graph API**: Instagram + Facebook posting
-- **PubMed E-utilities**: Article discovery
-- **RSS Feeds**: 27 Q1/Q2 neurology journals (Lancet, NEJM, JAMA, Brain, Nature Neuroscience, etc.)
+- **PubMed E-utilities** (30+ MeSH keywords): Baseline neurology article discovery
+- **RSS Feeds** (35 Q1/Q2 journals): Premium journal coverage
+  - **Journals**: Lancet Neurology, JAMA Neurology, Stroke, Brain, Neurology, The Lancet, NEJM, Epilepsia, Movement Disorders, Annals of Neurology, European Journal of Neurology, Journal of Neurology Neurosurgery & Psychiatry, Alzheimer's & Dementia, Nature Neuroscience, Neurology Clinical Practice, Multiple Sclerosis Journal, Parkinsonism & Related Disorders, Current Opinion in Neurology, CNS Neuroscience & Therapeutics, Neuro-Oncology, Journal of Neurological Sciences, Frontiers in Neurology, BMC Neurology, Neurotherapeutics, Journal of Neuroimmunology, Neuroscience Letters, Acta Neurologica Scandinavica, Journal of Neurosurgery, Neuroimmunology & Neuroinflammation, Nature Medicine, Science Translational Medicine, PLoS Biology, eLife, PLOS One, Cell Reports
+  - **Strategy**: Hybrid approach — PubMed for breadth (30+ MeSH), RSS for quality (top 35 journals)
 
 ### Python Libraries
 ```

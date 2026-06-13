@@ -13,6 +13,7 @@ import os, json, sys, re, tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 import urllib.request
+import feedparser
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
@@ -33,40 +34,135 @@ from_addr = os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>")
 ai = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
 
 # ── 1. Fetch fresh articles from PubMed (always daily) ───────────────────────
+# Extended MeSH keywords (30+ neurological conditions)
 ESEARCH_URL = (
     "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     "?db=pubmed"
-    "&term=(neurology[MeSH]+OR+stroke[MeSH]+OR+multiple+sclerosis[MeSH]"
-    "+OR+epilepsy[MeSH]+OR+Parkinson+disease[MeSH]+OR+dementia[MeSH])"
+    "&term=("
+    # Extended MeSH Keywords (30+ neurological conditions)
+    "neurology[MeSH]+OR+stroke[MeSH]+OR+multiple+sclerosis[MeSH]"
+    "+OR+epilepsy[MeSH]+OR+Parkinson+disease[MeSH]+OR+dementia[MeSH]"
+    "+OR+Alzheimer+disease[MeSH]+OR+traumatic+brain+injury[MeSH]"
+    "+OR+spinal+cord+injuries[MeSH]+OR+amyotrophic+lateral+sclerosis[MeSH]"
+    "+OR+Huntington+disease[MeSH]+OR+Guillain-Barré+syndrome[MeSH]"
+    "+OR+myasthenia+gravis[MeSH]+OR+peripheral+neuropathy[MeSH]"
+    "+OR+brain+neoplasms[MeSH]+OR+migraine[MeSH]+OR+sleep+disorders[MeSH]"
+    "+OR+dystonia[MeSH]+OR+ataxia[MeSH]+OR+narcolepsy[MeSH]"
+    "+OR+neuroimmunology[MeSH]+OR+autoimmune+nervous+system+diseases[MeSH]"
+    "+OR+myelin+disorders[MeSH]+OR+neuroinflammation[MeSH]"
+    "+OR+cerebellar+ataxia[MeSH]+OR+Lewy+body+dementia[MeSH]"
+    "+OR+Frontotemporal+dementia[MeSH]+OR+Charcot-Marie-Tooth+disease[MeSH]"
+    "+OR+hereditary+spastic+paraplegia[MeSH]+OR+cerebral+palsy[MeSH]"
+    "+OR+autism+spectrum+disorder[MeSH]+OR+intellectual+disability[MeSH]"
+    ")"
+    # Article types: clinical trials, reviews, guidelines, meta-analyses
     "+AND+(clinical+trial[pt]+OR+review[pt]+OR+guideline[pt]+OR+meta-analysis[pt])"
-    "&retmax=20&sort=date&retmode=json&datetype=pdat&reldate=3"
+    "&retmax=30&sort=date&retmode=json&datetype=pdat&reldate=7"
 )
 
-def fetch_fresh_articles() -> list[dict]:
-    """Fetch last 3 days of neurology articles from PubMed."""
-    with urllib.request.urlopen(ESEARCH_URL, timeout=30) as r:
-        data = json.loads(r.read())
-    ids = data["esearchresult"]["idlist"]
-    if not ids:
-        return []
-    ids_str = ",".join(ids[:20])
-    summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id={ids_str}"
-    with urllib.request.urlopen(summary_url, timeout=30) as r:
-        summary = json.loads(r.read())
+# 35 Q1/Q2 Neurology Journals with RSS feeds
+RSS_FEEDS = [
+    ("Lancet Neurology", "https://feeds.thelancet.com/lancet-neurology/"),
+    ("JAMA Neurology", "https://jamanetwork.com/journals/jamaneurology/pages/rss"),
+    ("Stroke", "https://www.ahajournals.org/action/showFeed?type=etoc&feed=rss&jc=strokeaha"),
+    ("Brain", "https://academic.oup.com/brain/pages/rss"),
+    ("Neurology", "https://n.neurology.org/rss/current.xml"),
+    ("The Lancet", "https://feeds.thelancet.com/lancet/"),
+    ("NEJM", "https://www.nejm.org/action/showFeed?type=etoc&feed=rss"),
+    ("Epilepsia", "https://onlinelibrary.wiley.com/hub/journal/15281167/rss"),
+    ("Movement Disorders", "https://onlinelibrary.wiley.com/hub/journal/15315487/rss"),
+    ("Annals of Neurology", "https://onlinelibrary.wiley.com/hub/journal/15318249/rss"),
+    ("European Journal of Neurology", "https://onlinelibrary.wiley.com/hub/journal/14681331/rss"),
+    ("Journal of Neurology Neurosurgery Psychiatry", "https://jnnp.bmj.com/rss/current.xml"),
+    ("Alzheimer's & Dementia", "https://onlinelibrary.wiley.com/hub/journal/15525279/rss"),
+    ("Nature Neuroscience", "https://www.nature.com/neuro/current_issue/rss/index.rss"),
+    ("Neurology Clinical Practice", "https://cp.neurology.org/rss/current.xml"),
+    ("Multiple Sclerosis Journal", "https://journals.sagepub.com/action/showFeed?type=etoc&feed=rss&jc=msja"),
+    ("Parkinsonism & Related Disorders", "https://feeds.elsevier.com/rss/prddis"),
+    ("Current Opinion in Neurology", "https://www.co-neurology.com/rss/current.xml"),
+    ("CNS Neuroscience & Therapeutics", "https://onlinelibrary.wiley.com/hub/journal/17555949/rss"),
+    ("Neuro-Oncology", "https://academic.oup.com/neuro-oncology/pages/rss"),
+    ("Journal of Neurological Sciences", "https://feeds.elsevier.com/rss/jns"),
+    ("Frontiers in Neurology", "https://www.frontiersin.org/journals/neurology/rss/"),
+    ("BMC Neurology", "https://bmcneurol.biomedcentral.com/articles/rss"),
+    ("Neurotherapeutics", "https://link.springer.com/search.rss?facet-journal-id=13311&channel-name=Neurotherapeutics"),
+    ("Journal of Neuroimmunology", "https://feeds.elsevier.com/rss/jneuroim"),
+    ("Neuroscience Letters", "https://feeds.elsevier.com/rss/neulet"),
+    ("Acta Neurologica Scandinavica", "https://onlinelibrary.wiley.com/hub/journal/16000404/rss"),
+    ("Journal of Neurosurgery", "https://thejns.org/rss/current.xml"),
+    ("Neuroimmunology and Neuroinflammation", "https://ninn.amegroups.com/rss/current.xml"),
+    ("Nature Medicine", "https://www.nature.com/nm/current_issue/rss/index.rss"),
+    ("Science Translational Medicine", "https://feeds.sciencemag.org/scitranslmed/current.xml"),
+    ("PLoS Biology", "https://feeds.plos.org/plosbiology/unfiltered/rss.xml"),
+    ("eLife", "https://elifesciences.org/rss/neuroscience.xml"),
+    ("PLOS One", "https://feeds.plos.org/plosone/neuroscience.xml"),
+    ("Cell Reports", "https://feeds.cell.com/cell-reports/rss/"),
+]
+
+def fetch_rss_articles() -> list[dict]:
+    """Fetch latest articles from 35 Q1/Q2 Neurology journal RSS feeds."""
     articles = []
-    for uid in ids[:20]:
-        if uid not in summary["result"]:
-            continue
-        art = summary["result"][uid]
-        title = art.get("title", "").strip().rstrip(".")
-        if title:
-            articles.append({
-                "title":   title,
-                "url":     f"https://pubmed.ncbi.nlm.nih.gov/{uid}/",
-                "journal": art.get("source", "PubMed"),
-                "abstract": title,
-            })
+    for journal_name, rss_url in RSS_FEEDS:
+        try:
+            feed = feedparser.parse(rss_url, timeout=10)
+            for entry in feed.entries[:3]:  # Top 3 per journal
+                title = entry.get("title", "").strip()
+                url = entry.get("link", "")
+                if title and url:
+                    articles.append({
+                        "title": title,
+                        "url": url,
+                        "journal": journal_name,
+                        "abstract": entry.get("summary", title)[:300],
+                    })
+        except Exception as e:
+            print(f"  ⚠️  RSS error for {journal_name}: {e}")
     return articles
+
+def fetch_fresh_articles() -> list[dict]:
+    """Fetch articles from PubMed (30+ MeSH keywords) + 35 RSS journal feeds."""
+    print("  Fetching from PubMed (30+ MeSH keywords)...")
+    pubmed_articles = []
+    try:
+        with urllib.request.urlopen(ESEARCH_URL, timeout=30) as r:
+            data = json.loads(r.read())
+        ids = data["esearchresult"]["idlist"]
+        if ids:
+            ids_str = ",".join(ids[:15])
+            summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id={ids_str}"
+            with urllib.request.urlopen(summary_url, timeout=30) as r:
+                summary = json.loads(r.read())
+            for uid in ids[:15]:
+                if uid not in summary["result"]:
+                    continue
+                art = summary["result"][uid]
+                title = art.get("title", "").strip().rstrip(".")
+                if title:
+                    pubmed_articles.append({
+                        "title": title,
+                        "url": f"https://pubmed.ncbi.nlm.nih.gov/{uid}/",
+                        "journal": art.get("source", "PubMed"),
+                        "abstract": title,
+                    })
+    except Exception as e:
+        print(f"  ⚠️  PubMed error: {e}")
+
+    print(f"  PubMed: {len(pubmed_articles)} articles")
+
+    print("  Fetching from 35 RSS journal feeds...")
+    rss_articles = fetch_rss_articles()
+    print(f"  RSS: {len(rss_articles)} articles")
+
+    # Merge and deduplicate by URL
+    all_articles = pubmed_articles + rss_articles
+    seen_urls = set()
+    unique = []
+    for art in all_articles:
+        if art["url"] not in seen_urls:
+            seen_urls.add(art["url"])
+            unique.append(art)
+
+    return unique
 
 def get_existing_notion_keys() -> tuple[set, set]:
     """Get existing URLs and title prefixes from Notion to avoid duplicates."""
@@ -141,6 +237,52 @@ def save_all_to_notion(articles: list[dict], existing_urls: set) -> list[dict]:
     return saved
 
 # ── Kept for compatibility ────────────────────────────────────────────────────
+def fetch_scheduled_articles() -> list[dict]:
+    """Fetch Notion articles with Status=Scheduled (priority for social elaboration)."""
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+
+    payload = {
+        "filter": {
+            "and": [
+                {"property": "Status", "select": {"equals": "Scheduled"}},
+            ]
+        },
+        "sorts": [{"property": "Published", "direction": "descending"}],
+        "page_size": 5,
+    }
+    req = urllib.request.Request(
+        f"https://api.notion.com/v1/databases/{notion_db_id}/query",
+        data=json.dumps(payload).encode(),
+        headers={
+            "Authorization":  f"Bearer {notion_token}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type":   "application/json",
+        }
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.loads(r.read())
+
+    articles = []
+    for page in data.get("results", []):
+        props = page["properties"]
+        title   = "".join(t["plain_text"] for t in props.get("Nome", {}).get("title", []))
+        url     = props.get("URL", {}).get("url") or ""
+        journal = (props.get("Journal", {}).get("select") or {}).get("name", "")
+        summary = "".join(t["plain_text"] for t in props.get("Summary", {}).get("rich_text", []))
+        use_for = [o["name"] for o in props.get("Use for", {}).get("multi_select", [])]
+        if "Social" in use_for:
+            continue
+        if title:
+            articles.append({
+                "title":        title,
+                "url":          url,
+                "journal":      journal,
+                "abstract":     summary[:500] if summary else title,
+                "notion_id":    page["id"],
+            })
+    return articles
+
 def fetch_articles() -> list[dict]:
     """Read New articles from Notion not yet used for Social."""
     notion_token = os.getenv("NOTION_TOKEN", "")
@@ -684,34 +826,60 @@ def send_reel_email(content: dict, reel_url: str):
 if __name__ == "__main__":
     print("=== NeuroDigest Social Daily ===")
 
-    # CRITICAL: Check if we already have a PENDING (unapproved) post from today or recently
-    # This prevents multiple emails about unapproved articles
-    pending_today = (
+    # CRITICAL: Rule = ONLY 1 POST PER DAY
+    # Check: (1) if a post exists TODAY (created_at within last 24h), stop — it's today's post
+    #        (2) if PENDING posts exist (older than today), require approval before creating new one
+    today_posts = (
         sb.table("social_posts")
-          .select("id,article_title,article_url,created_at")
-          .is_("posted_at", "null")
+          .select("id,article_title,created_at,posted_at")
           .order("created_at", desc=True)
-          .limit(5)
+          .limit(10)
           .execute()
     )
 
-    if pending_today.data:
-        print(f"⚠️  PENDING POSTS EXIST (not yet approved):")
-        for p in pending_today.data:
-            created = datetime.fromisoformat(p["created_at"])
-            hours_ago = (datetime.now(timezone.utc) - created).total_seconds() / 3600
-            status = "TODAY" if hours_ago < 24 else f"{int(hours_ago)}h ago"
-            print(f"   - [{status}] {p['article_title'][:60]}")
-        print("\n💡 RULE: Only 1 pending post at a time. Approve or reject before new posts are created.")
-        print("Exiting to prevent email loop.")
+    now_utc = datetime.now(timezone.utc)
+    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Check for TODAY's posts (created within last 24 hours)
+    todays_posts_list = []
+    for p in (today_posts.data or []):
+        created = datetime.fromisoformat(p["created_at"]).replace(tzinfo=None)
+        if created >= today_start.replace(tzinfo=None):
+            todays_posts_list.append(p)
+
+    # Allow max 2 posts per day (1 Scheduled from Notion, 1 new from PubMed)
+    if len(todays_posts_list) >= 2:
+        print(f"⚠️  Already have 2 posts today (max reached):")
+        for p in todays_posts_list:
+            status = "POSTED" if p["posted_at"] else "PENDING"
+            print(f"   - [{status}] {p['article_title'][:70]}")
+        print(f"\n💡 RULE: Max 2 posts per day. Return tomorrow for a new article.")
+        sys.exit(0)
+
+    # Check for PENDING posts (older than today) — these must be approved/rejected first
+    pending_posts = [p for p in (today_posts.data or []) if p["posted_at"] is None]
+    if pending_posts:
+        print(f"⚠️  PENDING POSTS FROM PREVIOUS DAYS (not yet approved):")
+        for p in pending_posts:
+            print(f"   - {p['article_title'][:70]}")
+        print(f"\n💡 RULE: Approve or reject all pending posts before creating new ones.")
+        print(f"Exiting to prevent approval backlog.")
         sys.exit(0)
 
     print("\n[1/6] Fetching fresh articles from PubMed...")
-    fresh = fetch_fresh_articles()
-    print(f"      {len(fresh)} articles found")
-    if not fresh:
-        print("No articles found — exiting.")
-        sys.exit(0)
+    try:
+        fresh = fetch_fresh_articles()
+        print(f"      {len(fresh)} articles found")
+        if not fresh:
+            print("No articles found — exiting.")
+            sys.exit(0)
+    except Exception as e:
+        print(f"❌ FETCH ERROR: {e}")
+        print(f"   This likely means the PubMed E-utilities query is invalid.")
+        print(f"   Check: ESEARCH_URL syntax, network connection, PubMed API status")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
     # Get recently posted article URLs (last 21 days) to avoid repeating content
     recent_posts = sb.table("social_posts").select("article_url").not_.is_("posted_at", "null").order("created_at", desc=True).limit(30).execute()
