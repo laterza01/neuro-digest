@@ -2,7 +2,7 @@
 Vercel endpoint — rifiuta il post social.
 Deletes the rejected post + immediately generates a new article + sends new preview email (SAME DAY).
 """
-import os, json, hmac, subprocess
+import os, json, hmac
 import urllib.request
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -23,20 +23,18 @@ def delete_post(supabase_url: str, supabase_key: str, post_id: str) -> bool:
         return False
 
 
-def trigger_new_article() -> bool:
-    """Launch social_daily.py to generate a new article immediately."""
+def trigger_new_article(cron_secret: str, site_url: str) -> bool:
+    """Trigger social_daily.py via HTTP call to /api/trigger_social."""
     try:
-        result = subprocess.run(
-            ["python3", "/var/task/social_daily.py"],
-            capture_output=True,
-            timeout=120,
-            text=True
-        )
-        print(f"[trigger_new_article] exit code: {result.returncode}")
-        print(f"[trigger_new_article] stdout: {result.stdout[:500]}")
-        if result.stderr:
-            print(f"[trigger_new_article] stderr: {result.stderr[:500]}")
-        return result.returncode == 0
+        url = f"{site_url}/api/trigger_social"
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Authorization", f"Bearer {cron_secret}")
+
+        with urllib.request.urlopen(req, timeout=120) as response:
+            status = response.status
+            body = response.read().decode("utf-8")
+            print(f"[trigger_new_article] status: {status}, response: {body[:200]}")
+            return status in (200, 202)
     except Exception as e:
         print(f"Failed to trigger new article: {e}")
         return False
@@ -48,6 +46,8 @@ class handler(BaseHTTPRequestHandler):
         approve_secret = os.getenv("SOCIAL_APPROVE_SECRET", "")
         supabase_url   = os.getenv("SUPABASE_URL", "")
         supabase_key   = os.getenv("SUPABASE_SERVICE_KEY", "")
+        cron_secret    = os.getenv("CRON_SECRET", "")
+        site_url       = os.getenv("SITE_URL", "https://www.neuro-digest.com")
 
         params  = parse_qs(urlparse(self.path).query)
         token    = params.get("token", [""])[0]
@@ -65,7 +65,7 @@ class handler(BaseHTTPRequestHandler):
         if ok:
             # Trigger new article generation immediately (same day)
             print("[social_reject] Post deleted, triggering new article generation...")
-            trigger_ok = trigger_new_article()
+            trigger_ok = trigger_new_article(cron_secret, site_url)
 
             status_msg = "A new article will be sent shortly" if trigger_ok else "A new article will be generated tomorrow"
             status_color = "#0e7c5a" if trigger_ok else "#c0392b"
