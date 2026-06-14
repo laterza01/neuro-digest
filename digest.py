@@ -532,19 +532,12 @@ def build_html_email(digest: dict, edition: int,
     )
     sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
-    # Social links with base64 embedded PNG icons (gray #888, Font Awesome style)
-    fb_png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAoElEQVR4nN2WSw6AIAxEpfHOcwV6agxGE9SWb0nUSXDFvNIWEBdCWEpiZnESAFfyOi2ABtWkBSMLeM5DFvCcl6zgGoMs4RKLauAA9tGikyk22VI0O4Dz3hdrD6E8zPyODNaWyVy56u4M0LGbflAiVFy5vYrs7x80ip8ZZcLBvPzRrG5UJAu+lMgiE9wYjx6MBIHgFZvcE0TzqK+KVCPPlg3PTVKF69KFVgAAAABJRU5ErkJggg=='
-    ig_png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAl0lEQVR4nNVWAQqAIAzM4Z/vDfdqo0hZguVyFh0IinK32yYaUkrLTES9IOmiBiDkuXiT11ziTZ6ROYuDV2rwFADKnORp730HUNF44LsasMrlHVrOxUoCYwq7BQDsrrZhERELeYZFZHqRpecQq4hrRy43mUrE0mFNgascw7vII4ijF+wfXTQsoN9QL+DgLA48RTRXmP1tWQG79T9mbXqSogAAAABJRU5ErkJggg=='
-
+    # Social links with text
     social_links = (
         '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
-        'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">'
-        f'<img src="{fb_png}" alt="Facebook" width="24" height="24">'
-        '</a>'
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Facebook</a> '
         '<a href="https://www.instagram.com/neurodigest_official/" '
-        'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">'
-        f'<img src="{ig_png}" alt="Instagram" width="24" height="24">'
-        '</a>'
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Instagram</a>'
     )
 
     return f"""<!DOCTYPE html>
