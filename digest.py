@@ -532,6 +532,14 @@ def build_html_email(digest: dict, edition: int,
     )
     sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
+    # Social links
+    social_links = (
+        '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
+        'target="_blank" style="color:#999;text-decoration:none;margin:0 4px">📘</a> '
+        '<a href="https://www.instagram.com/neurodigest_official/" '
+        'target="_blank" style="color:#999;text-decoration:none;margin:0 4px">📷</a>'
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -599,6 +607,9 @@ def build_html_email(digest: dict, edition: int,
         </strong>
         &nbsp;&middot;&nbsp;
         {manage_link}{sep}{unsub_link}
+      </p>
+      <p style="margin:8px 0 0;font-size:16px;text-align:center;line-height:1">
+        {social_links}
       </p>
     </td></tr>
 
@@ -1396,6 +1407,9 @@ def build_guidelines_html_email(
         </strong>
         &nbsp;&middot;&nbsp;
         {manage_link}{sep}{unsub_link}
+      </p>
+      <p style="margin:8px 0 0;font-size:16px;text-align:center;line-height:1">
+        {social_links}
       </p>
     </td></tr>
 
