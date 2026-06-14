@@ -856,7 +856,27 @@ if __name__ == "__main__":
         print(f"⚠️  Could not check pending posts: {e}")
         pending_posts = []
 
-    # If ANY pending post exists → STOP
+    # Check for AUTO-REJECT (pending > 24h) — delete old pending posts
+    now_utc = datetime.now(timezone.utc)
+    auto_rejected = []
+    for p in pending_posts:
+        created_dt = datetime.fromisoformat(p["created_at"])
+        age_hours = (now_utc - created_dt).total_seconds() / 3600
+        if age_hours > 24:
+            # Auto-reject: delete the old pending post
+            print(f"\n⏱️  AUTO-REJECT: Post pending > 24h — deleting and generating new one")
+            print(f"   {p['article_title'][:70]} ({int(age_hours)}h old)")
+            try:
+                sb.table("social_posts").delete().eq("id", p["id"]).execute()
+                auto_rejected.append(p["id"])
+            except Exception as e:
+                print(f"   ⚠️  Could not auto-reject: {e}")
+
+    # Re-check pending posts after auto-reject
+    if auto_rejected:
+        pending_posts = [p for p in pending_posts if p["id"] not in auto_rejected]
+
+    # If ANY pending post exists (and is < 24h) → STOP
     if pending_posts:
         print(f"⚠️  PENDING POST(S) EXIST — BLOCKING NEW POST GENERATION")
         print(f"\n   You have {len(pending_posts)} unapproved post(s):")
@@ -866,7 +886,7 @@ if __name__ == "__main__":
             print(f"   - {p['article_title'][:70]}")
             print(f"     (created {age_hours}h ago)")
         print(f"\n🔒 STRICT RULE: APPROVE or REJECT each post before new ones are generated.")
-        print(f"   This prevents email spam and ensures control.")
+        print(f"   Posts automatically rejected after 24h of inaction.")
         print(f"   Exiting without generating new post.")
         sys.exit(0)
 
