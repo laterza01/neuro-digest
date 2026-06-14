@@ -532,12 +532,15 @@ def build_html_email(digest: dict, edition: int,
     )
     sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
-    # Social links
+    # Social links with Font Awesome-style SVG icons
+    fb_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" style="display:inline-block;vertical-align:middle"><circle cx="12" cy="12" r="11" fill="none" stroke="#888" stroke-width="1"/><path d="M10 9v2h-1v2h1v6h2v-6h1.5l0.5-2h-2V9.5c0-.5.1-.5.5-.5h1.5V7c-1 0-2 0-2.5.5S10 8.5 10 9z" fill="#888"/></svg>'
+    ig_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" style="display:inline-block;vertical-align:middle"><rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="#888" stroke-width="1"/><circle cx="12" cy="12" r="4" fill="none" stroke="#888" stroke-width="1"/><circle cx="17" cy="7" r="1" fill="#888"/></svg>'
+
     social_links = (
-        '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
-        'target="_blank" style="color:#999;text-decoration:none;margin:0 4px">📘</a> '
-        '<a href="https://www.instagram.com/neurodigest_official/" '
-        'target="_blank" style="color:#999;text-decoration:none;margin:0 4px">📷</a>'
+        f'<a href="https://www.facebook.com/profile.php?id=61589980587224" '
+        f'target="_blank" style="text-decoration:none;margin:0 6px;display:inline-block">{fb_icon}</a>'
+        f'<a href="https://www.instagram.com/neurodigest_official/" '
+        f'target="_blank" style="text-decoration:none;margin:0 6px;display:inline-block">{ig_icon}</a>'
     )
 
     return f"""<!DOCTYPE html>
@@ -726,57 +729,57 @@ def save_articles_to_notion(digest_data: dict) -> int:
             if not title:
                 continue
 
-                # Map topic to Notion select option
-                topic_map = {
-                    "multiple sclerosis": "Multiple Sclerosis",
-                    "stroke": "Stroke",
-                    "parkinson": "Parkinson's Disease",
-                    "epilepsy": "Epilepsy",
-                    "dementia": "Dementia",
-                    "headache": "Headache",
-                    "neuromuscular": "Neuromuscular",
-                    "neuro-oncology": "Neuro-Oncology",
-                    "neuroinflammation": "Neuroinflammation",
-                }
-                notion_topic = "Other"
-                for key, val in topic_map.items():
-                    if key in topic.lower():
-                        notion_topic = val
-                        break
-                if notion_topic == "Other":
-                    notion_topic = topic[:100]
+            # Map topic to Notion select option
+            topic_map = {
+                "multiple sclerosis": "Multiple Sclerosis",
+                "stroke": "Stroke",
+                "parkinson": "Parkinson's Disease",
+                "epilepsy": "Epilepsy",
+                "dementia": "Dementia",
+                "headache": "Headache",
+                "neuromuscular": "Neuromuscular",
+                "neuro-oncology": "Neuro-Oncology",
+                "neuroinflammation": "Neuroinflammation",
+            }
+            notion_topic = "Other"
+            for key, val in topic_map.items():
+                if key in topic.lower():
+                    notion_topic = val
+                    break
+            if notion_topic == "Other":
+                notion_topic = topic[:100]
 
-                page = {
-                    "parent": {"database_id": notion_db_id},
-                    "properties": {
-                        "Nome":      {"title": [{"text": {"content": title[:200]}}]},
-                        "Journal":   {"select": {"name": journal[:100] if journal else "Unknown"}},
-                        "Topic":     {"select": {"name": notion_topic}},
-                        "Summary":   {"rich_text": [{"text": {"content": summary}}]},
-                        "URL":       {"url": url if url else None},
-                        "Week":      {"date": {"start": week_str}},
-                        "Use for":   {"multi_select": [{"name": "Mail"}]},
-                        "Status":    {"select": {"name": "New"}},
-                    }
+            page = {
+                "parent": {"database_id": notion_db_id},
+                "properties": {
+                    "Nome":      {"title": [{"text": {"content": title[:200]}}]},
+                    "Journal":   {"select": {"name": journal[:100] if journal else "Unknown"}},
+                    "Topic":     {"select": {"name": notion_topic}},
+                    "Summary":   {"rich_text": [{"text": {"content": summary}}]},
+                    "URL":       {"url": url if url else None},
+                    "Week":      {"date": {"start": week_str}},
+                    "Use for":   {"multi_select": [{"name": "Mail"}]},
+                    "Status":    {"select": {"name": "Used"}},
                 }
-                # Remove URL if empty (Notion doesn't accept null url)
-                if not url:
-                    del page["properties"]["URL"]
+            }
+            # Remove URL if empty (Notion doesn't accept null url)
+            if not url:
+                del page["properties"]["URL"]
 
-                try:
-                    data = json.dumps(page).encode()
-                    request = _req.Request(
-                        "https://api.notion.com/v1/pages",
-                        data=data, method="POST"
-                    )
-                    request.add_header("Authorization", f"Bearer {notion_token}")
-                    request.add_header("Notion-Version", "2022-06-28")
-                    request.add_header("Content-Type", "application/json")
-                    with _req.urlopen(request) as r:
-                        if r.status == 200:
-                            saved += 1
-                except Exception as e:
-                    print(f"  Notion error for '{title[:50]}': {e}")
+            try:
+                data = json.dumps(page).encode()
+                request = _req.Request(
+                    "https://api.notion.com/v1/pages",
+                    data=data, method="POST"
+                )
+                request.add_header("Authorization", f"Bearer {notion_token}")
+                request.add_header("Notion-Version", "2022-06-28")
+                request.add_header("Content-Type", "application/json")
+                with _req.urlopen(request) as r:
+                    if r.status == 200:
+                        saved += 1
+            except Exception as e:
+                print(f"  Notion error for '{title[:50]}': {e}")
 
     return saved
 
