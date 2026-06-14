@@ -1703,7 +1703,8 @@ def run(generate_only: bool = False):
             print(f"  · {s['topic']} ({len(s.get('themes', []))} themes)")
         print(f"  Bottom line: {digest_data.get('bottom_line','')[:80]}...")
 
-        html  = build_html_email(digest_data, edition)
+        site_url = os.getenv("SITE_URL", "https://www.neuro-digest.com")
+        html  = build_html_email(digest_data, edition, site_url=site_url)
         plain = build_plain_text(digest_data, edition)
 
         (OUTPUT_DIR / "neuro_digest.html").write_text(html)
