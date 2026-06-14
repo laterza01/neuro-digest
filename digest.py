@@ -532,15 +532,12 @@ def build_html_email(digest: dict, edition: int,
     )
     sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
-    # Social links with Font Awesome-style SVG icons
-    fb_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" style="display:inline-block;vertical-align:middle"><circle cx="12" cy="12" r="11" fill="none" stroke="#888" stroke-width="1"/><path d="M10 9v2h-1v2h1v6h2v-6h1.5l0.5-2h-2V9.5c0-.5.1-.5.5-.5h1.5V7c-1 0-2 0-2.5.5S10 8.5 10 9z" fill="#888"/></svg>'
-    ig_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" style="display:inline-block;vertical-align:middle"><rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="#888" stroke-width="1"/><circle cx="12" cy="12" r="4" fill="none" stroke="#888" stroke-width="1"/><circle cx="17" cy="7" r="1" fill="#888"/></svg>'
-
+    # Social links with text labels (best email compatibility)
     social_links = (
-        f'<a href="https://www.facebook.com/profile.php?id=61589980587224" '
-        f'target="_blank" style="text-decoration:none;margin:0 6px;display:inline-block">{fb_icon}</a>'
-        f'<a href="https://www.instagram.com/neurodigest_official/" '
-        f'target="_blank" style="text-decoration:none;margin:0 6px;display:inline-block">{ig_icon}</a>'
+        '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Facebook</a> '
+        '<a href="https://www.instagram.com/neurodigest_official/" '
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Instagram</a>'
     )
 
     return f"""<!DOCTYPE html>
