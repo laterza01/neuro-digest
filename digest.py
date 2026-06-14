@@ -532,15 +532,18 @@ def build_html_email(digest: dict, edition: int,
     )
     sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
-    # Social links with Font Awesome-style filled icons (matching landing page)
-    fb_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" style="vertical-align:middle"><circle cx="12" cy="12" r="11" fill="#888"/><path d="M10 9v2h-1v2h1v6h2v-6h1.5l0.5-2h-2V9.5c0-.5.1-.5.5-.5h1.5V7c-1 0-2 0-2.5.5S10 8.5 10 9z" fill="#fff"/></svg>'
-    ig_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" style="vertical-align:middle"><rect x="3" y="3" width="18" height="18" rx="4" fill="#888"/><circle cx="12" cy="12" r="3.5" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="17.5" cy="6.5" r="1" fill="#fff"/></svg>'
-
+    # Social links with Font Awesome icons from CDN (email-compatible PNG images)
     social_links = (
-        f'<a href="https://www.facebook.com/profile.php?id=61589980587224" '
-        f'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">{fb_svg}</a>'
-        f'<a href="https://www.instagram.com/neurodigest_official/" '
-        f'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">{ig_svg}</a>'
+        '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
+        'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">'
+        '<img src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/brands/facebook.svg" '
+        'alt="Facebook" width="24" height="24" style="display:inline-block;vertical-align:middle;filter:invert(0.5)grayscale(100%)">'
+        '</a>'
+        '<a href="https://www.instagram.com/neurodigest_official/" '
+        'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">'
+        '<img src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/brands/instagram.svg" '
+        'alt="Instagram" width="24" height="24" style="display:inline-block;vertical-align:middle;filter:invert(0.5)grayscale(100%)">'
+        '</a>'
     )
 
     return f"""<!DOCTYPE html>
