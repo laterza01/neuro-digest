@@ -673,6 +673,7 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     fb_story_approve       = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb_story"
     ig_story_video_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig_story_video"
     fb_story_video_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb_story_video"
+    reject_url             = f"{SITE_URL}/api/social_reject?token={APPROVE_SECRET}&post_id={post_id}"
 
     fb_full = (
         f"{content['fb_text']}\n"
@@ -700,6 +701,12 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
          style="display:inline-block;background:#E1306C;color:#fff;font-size:14px;
                 font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-bottom:10px">
         ✅ &nbsp;APPROVE Carousel
+      </a>
+      <br>
+      <a href="{reject_url}"
+         style="display:inline-block;background:#999;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
+        ✋ &nbsp;REJECT (get new article)
       </a>
       <br>
       <a href="{ig_story_approve}"
@@ -749,8 +756,13 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
       <br>
       <a href="{fb_story_approve}"
          style="display:inline-block;background:#0e7c5a;color:#fff;font-size:14px;
-                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px;margin-right:10px">
         ✅ &nbsp;APPROVE Story — Immagini (tocca per avanzare)
+      </a>
+      <a href="{reject_url}"
+         style="display:inline-block;background:#999;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-top:8px">
+        ✋ &nbsp;REJECT
       </a>
       <br>
     </td></tr>

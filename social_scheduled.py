@@ -189,6 +189,7 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     title_short = content['article_title'][:55]
     ig_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=ig"
     fb_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=fb"
+    reject_url = f"{SITE_URL}/api/social_reject?token={APPROVE_SECRET}&post_id={post_id}"
 
     slides_html = "\n".join(
         f'<img src="{url}" width="480" style="display:block;margin:0 auto 8px;border-radius:8px;max-width:100%">'
@@ -202,7 +203,8 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     <tr><td style="padding:24px;text-align:center">
       <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#E1306C">Instagram · {today_str}</p>
       <p style="margin:0 0 16px;font-size:13px;color:#555">{len(slide_urls)} slides · 1080×1080px</p>
-      <a href="{ig_approve}" style="display:inline-block;background:#E1306C;color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px">✅ APPROVE Carousel</a>
+      <a href="{ig_approve}" style="display:inline-block;background:#E1306C;color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px;margin-right:10px">✅ APPROVE Carousel</a>
+      <a href="{reject_url}" style="display:inline-block;background:#999;color:#fff;font-size:14px;font-weight:700;text-decoration:none;padding:14px 40px;border-radius:2px">✋ REJECT</a>
     </td></tr>
   </table>
   <div style="background:#fff;padding:20px 24px;border-radius:8px">
