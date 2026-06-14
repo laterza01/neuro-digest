@@ -532,12 +532,15 @@ def build_html_email(digest: dict, edition: int,
     )
     sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
-    # Social links with text labels (best email compatibility)
+    # Social links with Font Awesome-style filled icons (matching landing page)
+    fb_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" style="vertical-align:middle"><circle cx="12" cy="12" r="11" fill="#888"/><path d="M10 9v2h-1v2h1v6h2v-6h1.5l0.5-2h-2V9.5c0-.5.1-.5.5-.5h1.5V7c-1 0-2 0-2.5.5S10 8.5 10 9z" fill="#fff"/></svg>'
+    ig_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" style="vertical-align:middle"><rect x="3" y="3" width="18" height="18" rx="4" fill="#888"/><circle cx="12" cy="12" r="3.5" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="17.5" cy="6.5" r="1" fill="#fff"/></svg>'
+
     social_links = (
-        '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
-        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Facebook</a> '
-        '<a href="https://www.instagram.com/neurodigest_official/" '
-        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Instagram</a>'
+        f'<a href="https://www.facebook.com/profile.php?id=61589980587224" '
+        f'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">{fb_svg}</a>'
+        f'<a href="https://www.instagram.com/neurodigest_official/" '
+        f'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">{ig_svg}</a>'
     )
 
     return f"""<!DOCTYPE html>
