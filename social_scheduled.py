@@ -244,9 +244,17 @@ def update_notion_status(notion_id: str, status: str):
 if __name__ == "__main__":
     print("=== NeuroDigest Scheduled Post Elaboration ===")
 
-    article = fetch_scheduled_article("Acute Kidney")
+    try:
+        article = fetch_scheduled_article("Acute Kidney")
+    except Exception as e:
+        print(f"❌ CRITICAL: Could not fetch Scheduled article from Notion: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
     if not article:
-        print("❌ No Scheduled article found matching 'Acute Kidney'")
+        print("ℹ️  No Scheduled article found matching 'Acute Kidney'")
+        print("   This is OK if no articles have Status=Scheduled in Notion")
         sys.exit(0)
 
     print(f"\n✓ Found Scheduled article: {article['title'][:70]}")
@@ -254,7 +262,13 @@ if __name__ == "__main__":
     print(f"  Notion ID: {article['notion_id']}")
 
     print("\n[1/4] Generating carousel with Claude...")
-    content = generate_content(article)
+    try:
+        content = generate_content(article)
+    except Exception as e:
+        print(f"❌ CRITICAL: Claude generation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
     print(f"      {content['article_title'][:70]}")
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -288,7 +302,13 @@ if __name__ == "__main__":
             sys.exit(1)
 
         print("\n[4/4] Sending preview email...")
-        send_preview(content, slide_urls, post_id)
+        try:
+            send_preview(content, slide_urls, post_id)
+        except Exception as e:
+            print(f"❌ CRITICAL: Could not send preview email: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
     print("\n✓ Updating Notion...")
     try:
