@@ -866,20 +866,26 @@ if __name__ == "__main__":
         print(f"Exiting to prevent approval backlog.")
         sys.exit(0)
 
-    print("\n[1/6] Fetching fresh articles from PubMed...")
+    print("\n[1/6] Fetching fresh articles from PubMed + RSS...")
+    fresh = None
     try:
         fresh = fetch_fresh_articles()
         print(f"      {len(fresh)} articles found")
-        if not fresh:
-            print("No articles found — exiting.")
-            sys.exit(0)
     except Exception as e:
-        print(f"❌ FETCH ERROR: {e}")
-        print(f"   This likely means the PubMed E-utilities query is invalid.")
-        print(f"   Check: ESEARCH_URL syntax, network connection, PubMed API status")
+        print(f"❌ CRITICAL FETCH ERROR: {e}")
+        print(f"   PubMed/RSS fetch failed completely. Cannot generate preview.")
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
+    if not fresh:
+        print("❌ NO ARTICLES FOUND from any source (PubMed + 35 RSS feeds)")
+        print("   This might mean:")
+        print("   - All RSS feeds are broken or inaccessible")
+        print("   - PubMed returned no results")
+        print("   - Network connectivity issue")
+        print("   Exiting to prevent empty email.")
+        sys.exit(0)
 
     # Get recently posted article URLs (last 21 days) to avoid repeating content
     recent_posts = sb.table("social_posts").select("article_url").not_.is_("posted_at", "null").order("created_at", desc=True).limit(30).execute()

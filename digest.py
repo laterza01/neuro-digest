@@ -1629,8 +1629,14 @@ def run(generate_only: bool = False):
                     print("  Nothing sent. Will retry next cron run.")
                     return
                 print("  ✅ Approved — proceeding with send.")
+            else:
+                print("  ❌ No digest found in Supabase — cannot verify approval. Exiting.")
+                return
         except Exception as e:
-            print(f"  Warning: could not check approval flag: {e}. Proceeding anyway.")
+            print(f"  ❌ CRITICAL: Could not check approval flag: {e}")
+            print(f"  BLOCKING SEND TO PREVENT UNAUTHORIZED MAIL.")
+            print(f"  Newsletter will NOT be sent. Please investigate.")
+            return
 
     # ── LAST MONDAY → Guidelines Edition only, no weekly digest ──────────────
     if is_last_monday_of_month():
