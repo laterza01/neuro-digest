@@ -706,18 +706,22 @@ def save_articles_to_notion(digest_data: dict) -> int:
     notion_token = os.getenv("NOTION_TOKEN", "")
     notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
     if not notion_token or not notion_db_id:
-        print("  Notion credentials not set — skipping.")
+        print("  ❌ Notion credentials not set — skipping.")
         return 0
 
     import urllib.request as _req
     week_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     saved = 0
+    sections = digest_data.get("sections", [])
+    print(f"  Processing {len(sections)} sections...")
 
-    for section in digest_data.get("sections", []):
+    for section in sections:
         topic    = section.get("topic", "Other")
         # sources are at section level, themes contain the body text
         themes_body = " ".join(t.get("body", "") for t in section.get("themes", []))[:2000]
-        for source in section.get("sources", []):
+        sources = section.get("sources", [])
+        print(f"    [{topic}] {len(sources)} sources")
+        for source in sources:
             title   = source.get("title", "").strip()
             journal = source.get("journal", "").strip()
             url     = source.get("url", "") or ""
