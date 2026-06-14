@@ -532,17 +532,20 @@ def build_html_email(digest: dict, edition: int,
     )
     sep = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
 
-    # Social links with Font Awesome icons from CDN (email-compatible PNG images)
+    # Social links with base64 embedded PNG icons (Font Awesome style, gray #888)
+    # Facebook: gray circle with white 'f'
+    fb_png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAWklEQVR4nGNk+M9Q////fx4GA4MDAwvDf4YHDAwMvxkYGP4zMDAw/GdkYPjPyMjAwsDAyPCfgYGBgZGRkYGRkZGBkZGBkZGBkZGBkZGBkYGBgYGBgZGBgZGBgYGBkYGBgYEBAFeB6pLM3uOQAAAAAElFTkSuQmCC'
+    # Instagram: gray square with white camera
+    ig_png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAZklEQVR4nGNkYGD4//8/AwMDAwMDA8N/BgYGhv8MDAz/GRgYGBkYGP4zMDAy/GdgYGD4z8DAyMDAwPCfgYGBgZGBgYGRkZGBkZGBkZGBkZGBkZGBkZGBkZGBkZGBkZGRgZGBgYGBgZGBgZGBkYGBgZGBgYGBgYGBkYEBAORu7/V1QVYzAAAAAElFTkSuQmCC'
+
     social_links = (
         '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
         'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">'
-        '<img src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/brands/facebook.svg" '
-        'alt="Facebook" width="24" height="24" style="display:inline-block;vertical-align:middle;filter:invert(0.5)grayscale(100%)">'
+        f'<img src="{fb_png}" alt="Facebook" width="24" height="24" style="display:inline-block;vertical-align:middle">'
         '</a>'
         '<a href="https://www.instagram.com/neurodigest_official/" '
         'target="_blank" style="text-decoration:none;margin:0 8px;display:inline-block">'
-        '<img src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/brands/instagram.svg" '
-        'alt="Instagram" width="24" height="24" style="display:inline-block;vertical-align:middle;filter:invert(0.5)grayscale(100%)">'
+        f'<img src="{ig_png}" alt="Instagram" width="24" height="24" style="display:inline-block;vertical-align:middle">'
         '</a>'
     )
 
