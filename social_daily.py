@@ -826,45 +826,39 @@ def send_reel_email(content: dict, reel_url: str):
 if __name__ == "__main__":
     print("=== NeuroDigest Social Daily ===")
 
-    # CRITICAL: Rule = ONLY 1 POST PER DAY
-    # Check: (1) if a post exists TODAY (created_at within last 24h), stop — it's today's post
-    #        (2) if PENDING posts exist (older than today), require approval before creating new one
-    today_posts = (
-        sb.table("social_posts")
-          .select("id,article_title,created_at,posted_at")
-          .order("created_at", desc=True)
-          .limit(10)
-          .execute()
-    )
+    # CRITICAL: Rule = APPROVE OR NOTHING
+    # Check: ANY pending post (not yet approved) → STOP. Don't generate new posts.
+    #        User must APPROVE or REJECT existing posts before new ones are created.
 
-    now_utc = datetime.now(timezone.utc)
-    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    print("Checking for ANY pending (unapproved) posts...")
+    try:
+        all_pending = (
+            sb.table("social_posts")
+              .select("id,article_title,created_at,posted_at")
+              .is_("posted_at", "null")  # All where posted_at is NULL
+              .order("created_at", desc=True)
+              .execute()
+        )
+        pending_posts = all_pending.data or []
+    except Exception as e:
+        print(f"⚠️  Could not check pending posts: {e}")
+        pending_posts = []
 
-    # Check for TODAY's posts (created within last 24 hours)
-    todays_posts_list = []
-    for p in (today_posts.data or []):
-        created = datetime.fromisoformat(p["created_at"]).replace(tzinfo=None)
-        if created >= today_start.replace(tzinfo=None):
-            todays_posts_list.append(p)
-
-    # Allow max 2 posts per day (1 Scheduled from Notion, 1 new from PubMed)
-    if len(todays_posts_list) >= 2:
-        print(f"⚠️  Already have 2 posts today (max reached):")
-        for p in todays_posts_list:
-            status = "POSTED" if p["posted_at"] else "PENDING"
-            print(f"   - [{status}] {p['article_title'][:70]}")
-        print(f"\n💡 RULE: Max 2 posts per day. Return tomorrow for a new article.")
-        sys.exit(0)
-
-    # Check for PENDING posts (older than today) — these must be approved/rejected first
-    pending_posts = [p for p in (today_posts.data or []) if p["posted_at"] is None]
+    # If ANY pending post exists → STOP
     if pending_posts:
-        print(f"⚠️  PENDING POSTS FROM PREVIOUS DAYS (not yet approved):")
+        print(f"⚠️  PENDING POST(S) EXIST — BLOCKING NEW POST GENERATION")
+        print(f"\n   You have {len(pending_posts)} unapproved post(s):")
         for p in pending_posts:
+            created_dt = datetime.fromisoformat(p["created_at"])
+            age_hours = int((datetime.now(timezone.utc) - created_dt).total_seconds() / 3600)
             print(f"   - {p['article_title'][:70]}")
-        print(f"\n💡 RULE: Approve or reject all pending posts before creating new ones.")
-        print(f"Exiting to prevent approval backlog.")
+            print(f"     (created {age_hours}h ago)")
+        print(f"\n🔒 STRICT RULE: APPROVE or REJECT each post before new ones are generated.")
+        print(f"   This prevents email spam and ensures control.")
+        print(f"   Exiting without generating new post.")
         sys.exit(0)
+
+    print("✓ No pending posts — safe to generate new one")
 
     print("\n[1/6] Fetching fresh articles from PubMed + RSS...")
     fresh = None
