@@ -104,7 +104,7 @@ def fetch_rss_articles() -> list[dict]:
     articles = []
     for journal_name, rss_url in RSS_FEEDS:
         try:
-            feed = feedparser.parse(rss_url, timeout=10)
+            feed = feedparser.parse(rss_url)
             for entry in feed.entries[:3]:  # Top 3 per journal
                 title = entry.get("title", "").strip()
                 url = entry.get("link", "")
