@@ -835,7 +835,8 @@ def send_reel_email(content: dict, reel_url: str):
     print(f"✓ Reel email sent")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
+def main():
+    """Generate social post. Called by webhook or CLI."""
     print("=== NeuroDigest Social Daily ===")
 
     # CRITICAL: Rule = APPROVE OR NOTHING
@@ -888,7 +889,7 @@ if __name__ == "__main__":
         print(f"\n🔒 STRICT RULE: APPROVE or REJECT each post before new ones are generated.")
         print(f"   Posts automatically rejected after 24h of inaction.")
         print(f"   Exiting without generating new post.")
-        sys.exit(0)
+        return
 
     print("✓ No pending posts — safe to generate new one")
 
@@ -902,7 +903,7 @@ if __name__ == "__main__":
         print(f"   PubMed/RSS fetch failed completely. Cannot generate preview.")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        raise
 
     if not fresh:
         print("❌ NO ARTICLES FOUND from any source (PubMed + 35 RSS feeds)")
@@ -911,7 +912,7 @@ if __name__ == "__main__":
         print("   - PubMed returned no results")
         print("   - Network connectivity issue")
         print("   Exiting to prevent empty email.")
-        sys.exit(0)
+        return
 
     # Get recently posted article URLs (last 21 days) to avoid repeating content
     recent_posts = sb.table("social_posts").select("article_url").not_.is_("posted_at", "null").order("created_at", desc=True).limit(30).execute()
@@ -966,7 +967,7 @@ if __name__ == "__main__":
     articles = [a for a in fresh if a["url"] not in recently_posted_urls and a["url"] not in pending_urls]
     if not articles:
         print("All fresh articles were recently posted or have pending posts — exiting.")
-        sys.exit(0)
+        return
     for a in articles:
         if not a.get("notion_id"):
             a["notion_id"] = ""
@@ -1028,7 +1029,7 @@ if __name__ == "__main__":
                 print(f"   URL: {content['article_url']}")
                 print(f"   Title: {content['article_title'][:70]}")
                 print(f"\n   Action: Use the existing pending post or delete it before creating a new one.")
-                sys.exit(1)
+                raise Exception("Duplicate article URL")
             # If posted_at is not null, the record was already posted. This shouldn't happen
             # but we'll allow it (old posting from previous day)
             print(f"   ⚠️  Record for this URL was previously posted")
@@ -1086,3 +1087,7 @@ if __name__ == "__main__":
     send_reel_email(content, reel_url)
 
     print("\n✓ Done!")
+
+
+if __name__ == "__main__":
+    main()

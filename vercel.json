@@ -9,7 +9,6 @@
     { "source": "/unsubscribe",  "destination": "/unsubscribe.html" }
   ],
   "crons": [
-    { "path": "/api/cron_social",     "schedule": "0 6 * * *"  },
     { "path": "/api/trigger_post",    "schedule": "0 12 * * *"  }
   ]
 }
