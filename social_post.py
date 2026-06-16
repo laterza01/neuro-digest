@@ -187,173 +187,173 @@ if __name__ == "__main__":
             print("No approved posts to publish — exiting.")
             sys.exit(0)
 
-    post = rows.data[0]
-    post_id    = post["id"]
-    slide_urls = post["slide_urls"]
-    fb_text    = post["fb_text"]
+        post = rows.data[0]
+        post_id    = post["id"]
+        slide_urls = post["slide_urls"]
+        fb_text    = post["fb_text"]
 
-    print(f"\nPost: {post['article_title'][:60]}")
-    print(f"Slides: {len(slide_urls)}")
+        print(f"\nPost: {post['article_title'][:60]}")
+        print(f"Slides: {len(slide_urls)}")
 
-    content = {
-        "article_title": post["article_title"],
-        "article_url":   post["article_url"],
-        "fb_text":       fb_text,
-    }
+        content = {
+            "article_title": post["article_title"],
+            "article_url":   post["article_url"],
+            "fb_text":       fb_text,
+        }
 
-    ig_post_id   = post.get("ig_post_id")
-    fb_post_id   = post.get("fb_post_id")
-    ig_story_id  = post.get("ig_story_id")
-    fb_story_id  = post.get("fb_story_id")
-    do_instagram      = bool(post.get("ig_approved"))
-    do_facebook       = bool(post.get("fb_approved"))
-    do_ig_story       = bool(post.get("ig_story_approved"))
-    do_fb_story       = bool(post.get("fb_story_approved"))
-    do_ig_story_video = bool(post.get("ig_story_video_approved"))
-    do_fb_story_video = bool(post.get("fb_story_video_approved"))
-    reel_url          = post.get("reel_url", "")
-    story_cover_url   = post.get("story_cover_url") or slide_urls[0]
+        ig_post_id   = post.get("ig_post_id")
+        fb_post_id   = post.get("fb_post_id")
+        ig_story_id  = post.get("ig_story_id")
+        fb_story_id  = post.get("fb_story_id")
+        do_instagram      = bool(post.get("ig_approved"))
+        do_facebook       = bool(post.get("fb_approved"))
+        do_ig_story       = bool(post.get("ig_story_approved"))
+        do_fb_story       = bool(post.get("fb_story_approved"))
+        do_ig_story_video = bool(post.get("ig_story_video_approved"))
+        do_fb_story_video = bool(post.get("fb_story_video_approved"))
+        reel_url          = post.get("reel_url", "")
+        story_cover_url   = post.get("story_cover_url") or slide_urls[0]
 
-    # Track if any post was actually published
-    something_posted = False
+        # Track if any post was actually published
+        something_posted = False
 
-    # Post to Instagram (skip if already done or not approved)
-    if not ig_post_id and do_instagram:
-        try:
-            print("\n[1/2] Posting to Instagram...")
-            caption    = build_caption(post)
-            ig_post_id = post_instagram_carousel(slide_urls, caption)
-            print(f"  ✓ Instagram post ID: {ig_post_id}")
-            something_posted = True
-        except Exception as e:
-            error_str = str(e)
-            if "403" in error_str and "limit" in error_str.lower():
-                print(f"  ⚠️  Instagram rate limited by Meta (too many requests)")
-                print(f"      Please wait 30-60 minutes and retry")
-            else:
-                print(f"  ✗ Instagram error: {e}")
-    else:
-        if ig_post_id:
-            print(f"\n[1/2] Instagram already posted ({ig_post_id}) — skipping")
+        # Post to Instagram (skip if already done or not approved)
+        if not ig_post_id and do_instagram:
+            try:
+                print("\n[1/2] Posting to Instagram...")
+                caption    = build_caption(post)
+                ig_post_id = post_instagram_carousel(slide_urls, caption)
+                print(f"  ✓ Instagram post ID: {ig_post_id}")
+                something_posted = True
+            except Exception as e:
+                error_str = str(e)
+                if "403" in error_str and "limit" in error_str.lower():
+                    print(f"  ⚠️  Instagram rate limited by Meta (too many requests)")
+                    print(f"      Please wait 30-60 minutes and retry")
+                else:
+                    print(f"  ✗ Instagram error: {e}")
+        else:
+            if ig_post_id:
+                print(f"\n[1/2] Instagram already posted ({ig_post_id}) — skipping")
 
-    # Post to Facebook (skip if already done or not approved)
-    if not fb_post_id and do_facebook:
-        try:
-            print("\n[2/4] Posting to Facebook...")
-            fb_cover = post.get("fb_cover_url") or slide_urls[0]
-            fb_post_id = post_facebook(fb_cover, fb_text, post["article_url"], post.get("journal", ""))
-            print(f"  ✓ Facebook post ID: {fb_post_id}")
-            something_posted = True
-        except Exception as e:
-            print(f"  ✗ Facebook error: {e}")
-    else:
-        if fb_post_id:
-            print(f"\n[2/4] Facebook already posted — skipping")
+        # Post to Facebook (skip if already done or not approved)
+        if not fb_post_id and do_facebook:
+            try:
+                print("\n[2/4] Posting to Facebook...")
+                fb_cover = post.get("fb_cover_url") or slide_urls[0]
+                fb_post_id = post_facebook(fb_cover, fb_text, post["article_url"], post.get("journal", ""))
+                print(f"  ✓ Facebook post ID: {fb_post_id}")
+                something_posted = True
+            except Exception as e:
+                print(f"  ✗ Facebook error: {e}")
+        else:
+            if fb_post_id:
+                print(f"\n[2/4] Facebook already posted — skipping")
 
-    # Instagram Story (1 cover verticale) — skip if already posted
-    if do_ig_story and not ig_story_id:
-        try:
-            print(f"\n[3/4] Posting Instagram Story (1080x1920)...")
-            ig_story_id = post_instagram_story(story_cover_url)
-            print(f"  ✓ Instagram Story posted: {ig_story_id}")
-            sb.table("social_posts").update({"ig_story_id": ig_story_id}).eq("id", post_id).execute()
-            something_posted = True
-        except Exception as e:
-            print(f"  ✗ Instagram Story error: {e}")
-    elif ig_story_id:
-        print(f"\n[3/4] Instagram Story already posted — skipping")
+        # Instagram Story (1 cover verticale) — skip if already posted
+        if do_ig_story and not ig_story_id:
+            try:
+                print(f"\n[3/4] Posting Instagram Story (1080x1920)...")
+                ig_story_id = post_instagram_story(story_cover_url)
+                print(f"  ✓ Instagram Story posted: {ig_story_id}")
+                sb.table("social_posts").update({"ig_story_id": ig_story_id}).eq("id", post_id).execute()
+                something_posted = True
+            except Exception as e:
+                print(f"  ✗ Instagram Story error: {e}")
+        elif ig_story_id:
+            print(f"\n[3/4] Instagram Story already posted — skipping")
 
-    # Facebook Story (1 cover verticale) — skip if already posted
-    if do_fb_story and not fb_story_id:
-        try:
-            print(f"\n[4/4] Posting Facebook Story (1080x1920)...")
-            fb_story_id = post_facebook_story(story_cover_url)
-            print(f"  ✓ Facebook Story posted: {fb_story_id}")
-            sb.table("social_posts").update({"fb_story_id": fb_story_id}).eq("id", post_id).execute()
-            something_posted = True
-        except Exception as e:
-            print(f"  ✗ Facebook Story error: {e}")
-    elif fb_story_id:
-        print(f"\n[4/4] Facebook Story already posted — skipping")
+        # Facebook Story (1 cover verticale) — skip if already posted
+        if do_fb_story and not fb_story_id:
+            try:
+                print(f"\n[4/4] Posting Facebook Story (1080x1920)...")
+                fb_story_id = post_facebook_story(story_cover_url)
+                print(f"  ✓ Facebook Story posted: {fb_story_id}")
+                sb.table("social_posts").update({"fb_story_id": fb_story_id}).eq("id", post_id).execute()
+                something_posted = True
+            except Exception as e:
+                print(f"  ✗ Facebook Story error: {e}")
+        elif fb_story_id:
+            print(f"\n[4/4] Facebook Story already posted — skipping")
 
-    # Instagram Story Video (MP4)
-    if do_ig_story_video and reel_url:
-        try:
-            print(f"\n[5/6] Posting Instagram Story Video...")
-            container = graph_post(f"{IG_ACCOUNT_ID}/media", {
-                "video_url":    reel_url,
-                "media_type":   "STORIES",
-                "access_token": FB_PAGE_TOKEN,
-            })
-            cid = container["id"]
-            for _ in range(15):
-                time.sleep(5)
-                status = graph_get(cid, {"fields": "status_code", "access_token": FB_PAGE_TOKEN})
-                if status.get("status_code") == "FINISHED":
-                    break
-            result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
-                "creation_id": cid, "access_token": FB_PAGE_TOKEN
-            })
-            print(f"  ✓ Instagram Story Video posted: {result['id']}")
-            something_posted = True
-        except Exception as e:
-            print(f"  ✗ Instagram Story Video error: {e}")
+        # Instagram Story Video (MP4)
+        if do_ig_story_video and reel_url:
+            try:
+                print(f"\n[5/6] Posting Instagram Story Video...")
+                container = graph_post(f"{IG_ACCOUNT_ID}/media", {
+                    "video_url":    reel_url,
+                    "media_type":   "STORIES",
+                    "access_token": FB_PAGE_TOKEN,
+                })
+                cid = container["id"]
+                for _ in range(15):
+                    time.sleep(5)
+                    status = graph_get(cid, {"fields": "status_code", "access_token": FB_PAGE_TOKEN})
+                    if status.get("status_code") == "FINISHED":
+                        break
+                result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
+                    "creation_id": cid, "access_token": FB_PAGE_TOKEN
+                })
+                print(f"  ✓ Instagram Story Video posted: {result['id']}")
+                something_posted = True
+            except Exception as e:
+                print(f"  ✗ Instagram Story Video error: {e}")
 
-    # Facebook Story Video (MP4)
-    if do_fb_story_video and reel_url:
-        try:
-            print(f"\n[6/6] Posting Facebook Story Video...")
-            result = graph_post(f"{FB_PAGE_ID}/video_stories", {
-                "file_url":    reel_url,
-                "video_state": "PUBLISHED",
-                "access_token": FB_PAGE_TOKEN,
-            })
-            print(f"  ✓ Facebook Story Video posted: {result.get('post_id','')}")
-            something_posted = True
-        except Exception as e:
-            print(f"  ✗ Facebook Story Video error: {e}")
+        # Facebook Story Video (MP4)
+        if do_fb_story_video and reel_url:
+            try:
+                print(f"\n[6/6] Posting Facebook Story Video...")
+                result = graph_post(f"{FB_PAGE_ID}/video_stories", {
+                    "file_url":    reel_url,
+                    "video_state": "PUBLISHED",
+                    "access_token": FB_PAGE_TOKEN,
+                })
+                print(f"  ✓ Facebook Story Video posted: {result.get('post_id','')}")
+                something_posted = True
+            except Exception as e:
+                print(f"  ✗ Facebook Story Video error: {e}")
 
-    # Update Supabase — only set posted_at if something was actually published
-    update_data = {
-        "ig_post_id": ig_post_id,
-        "fb_post_id": fb_post_id,
-    }
-    if something_posted:
-        update_data["posted_at"] = datetime.now(timezone.utc).isoformat()
+        # Update Supabase — only set posted_at if something was actually published
+        update_data = {
+            "ig_post_id": ig_post_id,
+            "fb_post_id": fb_post_id,
+        }
+        if something_posted:
+            update_data["posted_at"] = datetime.now(timezone.utc).isoformat()
 
-    sb.table("social_posts").update(update_data).eq("id", post_id).execute()
+        sb.table("social_posts").update(update_data).eq("id", post_id).execute()
 
-    # Update Notion: status=Used when something was posted
-    if something_posted and post.get("notion_page_id"):
-        notion_token = os.getenv("NOTION_TOKEN", "")
-        # Fetch current Use for values
-        get_req = urllib.request.Request(
-            f"https://api.notion.com/v1/pages/{post['notion_page_id']}",
-            headers={"Authorization": f"Bearer {notion_token}",
-                     "Notion-Version": "2022-06-28"}
-        )
-        with urllib.request.urlopen(get_req) as r:
-            page_data = json.loads(r.read())
-        current_use = [o["name"] for o in page_data["properties"].get("Use for", {}).get("multi_select", [])]
-        if "Social" not in current_use:
-            current_use.append("Social")
-        payload = {"properties": {
-            "Status":  {"select": {"name": "Used"}},
-            "Use for": {"multi_select": [{"name": v} for v in current_use]},
-        }}
-        req = urllib.request.Request(
-            f"https://api.notion.com/v1/pages/{post['notion_page_id']}",
-            data=json.dumps(payload).encode(), method="PATCH",
-            headers={"Authorization": f"Bearer {notion_token}",
-                     "Notion-Version": "2022-06-28",
-                     "Content-Type":   "application/json"}
-        )
-        try:
-            with urllib.request.urlopen(req) as r:
-                pass
-            print(f"\n✓ Notion updated: status=Used")
-        except Exception as e:
-            print(f"\n⚠️  Notion update failed: {e}")
+        # Update Notion: status=Used when something was posted
+        if something_posted and post.get("notion_page_id"):
+            notion_token = os.getenv("NOTION_TOKEN", "")
+            # Fetch current Use for values
+            get_req = urllib.request.Request(
+                f"https://api.notion.com/v1/pages/{post['notion_page_id']}",
+                headers={"Authorization": f"Bearer {notion_token}",
+                         "Notion-Version": "2022-06-28"}
+            )
+            with urllib.request.urlopen(get_req) as r:
+                page_data = json.loads(r.read())
+            current_use = [o["name"] for o in page_data["properties"].get("Use for", {}).get("multi_select", [])]
+            if "Social" not in current_use:
+                current_use.append("Social")
+            payload = {"properties": {
+                "Status":  {"select": {"name": "Used"}},
+                "Use for": {"multi_select": [{"name": v} for v in current_use]},
+            }}
+            req = urllib.request.Request(
+                f"https://api.notion.com/v1/pages/{post['notion_page_id']}",
+                data=json.dumps(payload).encode(), method="PATCH",
+                headers={"Authorization": f"Bearer {notion_token}",
+                         "Notion-Version": "2022-06-28",
+                         "Content-Type":   "application/json"}
+            )
+            try:
+                with urllib.request.urlopen(req) as r:
+                    pass
+                print(f"\n✓ Notion updated: status=Used")
+            except Exception as e:
+                print(f"\n⚠️  Notion update failed: {e}")
 
         print("\n✓ Done!")
 
