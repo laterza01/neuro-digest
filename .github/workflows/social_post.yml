@@ -1,8 +1,6 @@
 name: Social Post
 
 on:
-  schedule:
-    - cron: '0 12 * * *'   # Every day 12:00 UTC = 14:00 Italian time
   workflow_dispatch:
 
 jobs:
