@@ -1,20 +1,14 @@
 """
-Webhook endpoint for Google Cloud Scheduler.
-Cloud Scheduler calls this every day at 6:00 UTC to generate social posts.
+Webhook endpoint called by EasyCron every day at 6:00 UTC.
+Triggers GitHub Actions social_daily workflow — Playwright runs there, not on Vercel.
 """
-import os
-import sys
+import os, json, urllib.request
 from http.server import BaseHTTPRequestHandler
-
-# Add project root to path so we can import social_daily
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import social_daily
 
 
 class handler(BaseHTTPRequestHandler):
+
     def do_POST(self):
-        # Verify request came from EasyCron
         auth_header = self.headers.get("Authorization", "")
         webhook_secret = os.getenv("WEBHOOK_SECRET", "")
 
@@ -22,22 +16,31 @@ class handler(BaseHTTPRequestHandler):
             self._respond(401, "Unauthorized")
             return
 
-        print("[webhook_social] EasyCron triggered social_daily generation")
+        gh_token = os.getenv("GH_TOKEN", "")
+        if not gh_token:
+            self._respond(500, "GH_TOKEN not configured")
+            return
+
+        url  = "https://api.github.com/repos/laterza01/neuro-digest/actions/workflows/social_daily.yml/dispatches"
+        data = json.dumps({"ref": "main"}).encode()
+        req  = urllib.request.Request(url, data=data)
+        req.add_header("Authorization", f"Bearer {gh_token}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("Content-Type", "application/json")
 
         try:
-            social_daily.main()
-            self._respond(200, "✅ Social post generated successfully")
-            print("[webhook_social] Webhook completed")
-
+            with urllib.request.urlopen(req, timeout=15) as r:
+                if r.status == 204:
+                    print("[webhook_social] ✓ GitHub Actions social_daily triggered")
+                    self._respond(200, "✅ social_daily workflow triggered")
+                else:
+                    self._respond(500, f"GitHub returned {r.status}")
         except Exception as e:
-            print(f"[webhook_social] Error: {e}")
-            import traceback
-            traceback.print_exc()
-            self._respond(500, f"❌ Error: {str(e)}")
+            print(f"[webhook_social] ✗ Error: {e}")
+            self._respond(500, f"Error: {str(e)}")
 
     def do_GET(self):
-        # Health check
-        self._respond(200, "Webhook is active")
+        self._respond(200, "Webhook active")
 
     def _respond(self, code, body):
         encoded = body.encode("utf-8")

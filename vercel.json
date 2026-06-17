@@ -9,6 +9,7 @@
     { "source": "/unsubscribe",  "destination": "/unsubscribe.html" }
   ],
   "crons": [
+    { "path": "/api/webhook_social",  "schedule": "0 6 * * *"   },
     { "path": "/api/webhook_preview", "schedule": "0 18 * * 0"  },
     { "path": "/api/webhook_digest",  "schedule": "0 12 * * 1"  },
     { "path": "/api/webhook_post",    "schedule": "0 12 * * 2-6,0" }
