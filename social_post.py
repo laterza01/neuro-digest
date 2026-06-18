@@ -185,17 +185,19 @@ def _generate_x_body(fb_text: str, article_title: str = "") -> str:
     msg = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
-        messages=[{"role": "user", "content": f"""Write a tweet for @neuro_digest (neurology account). IN ENGLISH.
+        messages=[{"role": "user", "content": f"""You write tweets for @neuro_digest (neurology). ENGLISH ONLY — never Italian.
 
-Title: {article_title}
-Facebook text: {fb_text}
+Article: {article_title}
+Context: {fb_text}
 
-MANDATORY FORMAT (max 200 chars total):
-1 sentence describing the clinical challenge — 1 sentence with a practical rule of thumb (\"Rule of thumb: ...\")
+Write EXACTLY this structure (max 160 chars total — links and hashtags added separately):
 
-Key: [key point in 5-8 words].
+🧠 [1 punchy hook sentence]
+• [key finding, max 40 chars]
+• [clinical implication, max 40 chars]
+➡️ [short CTA, max 15 chars]
 
-Only this. No links, no hashtags, no intro."""}]
+No links, no hashtags. Output only the 4 lines above."""}]
     )
     return msg.content[0].text.strip()
 
@@ -206,10 +208,8 @@ def post_x(text: str, article_url: str, cover_url: str = "") -> str:
     from playwright.sync_api import sync_playwright
     from pathlib import Path
 
-    hashtags = "#neurology #neurodigest #neurologia"
     body = _generate_x_body(text)
-    url_part = f"\n\n{article_url}\n{hashtags}"
-    tweet_text = body + url_part
+    tweet_text = f"{body}\n📄 {article_url}\n📬 neuro-digest.com\n#Neurology #NeuroDigest #ClinicalNeurology"
 
     x_username = os.getenv("X_USERNAME", "neuro_digest")
     x_password = os.getenv("X_PASSWORD", "")

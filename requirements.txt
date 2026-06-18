@@ -10,3 +10,4 @@ stripe>=8.0.0
 playwright
 moviepy
 feedparser
+tweepy>=4.14.0

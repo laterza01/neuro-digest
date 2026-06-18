@@ -794,17 +794,21 @@ def generate_x_text(article_title: str, fb_text: str) -> str:
     msg = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
-        messages=[{"role": "user", "content": f"""Write a tweet for @neuro_digest (neurology account). IN ENGLISH.
+        messages=[
+            {"role": "user", "content": f"""You write tweets for @neuro_digest (neurology). ENGLISH ONLY — never Italian.
 
-Title: {article_title}
-Facebook text: {fb_text}
+Article: {article_title}
+Context: {fb_text}
 
-MANDATORY FORMAT (max 200 chars total):
-1 sentence describing the clinical challenge — 1 sentence with a practical rule of thumb (\"Rule of thumb: ...\")
+Write EXACTLY this structure (max 160 chars total — links and hashtags added separately):
 
-Key: [key point in 5-8 words].
+🧠 [1 punchy hook sentence]
+• [key finding, max 40 chars]
+• [clinical implication, max 40 chars]
+➡️ [short CTA, max 15 chars]
 
-Only this. No links, no hashtags, no intro."""}]
+No links, no hashtags. Output only the 4 lines above."""}
+        ]
     )
     return msg.content[0].text.strip()
 
@@ -814,11 +818,9 @@ def send_x_email(content: dict, post_id: str):
     title_short = content['article_title'][:55]
     x_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=x"
 
-    hashtags = "#neurology #neurodigest #neurologia"
     article_url = content['article_url']
     body = generate_x_text(content['article_title'], content['fb_text'])
-    url_part = f"\n\n{article_url}\n{hashtags}"
-    tweet_preview = body + url_part
+    tweet_preview = f"{body}\n📄 {article_url}\n📬 neuro-digest.com\n#Neurology #NeuroDigest #ClinicalNeurology"
 
     char_count = len(tweet_preview)
     tweet_html = tweet_preview.replace('\n', '<br>')
