@@ -163,7 +163,6 @@ def _x_login(page, username: str, password: str):
     page.wait_for_timeout(4000)
     inp = page.locator('input[name="username_or_email"]').first
     inp.wait_for(timeout=15000)
-    # fill() focuses the element internally — no click needed, avoids overlay issues
     inp.fill(username)
     page.wait_for_timeout(1000)
     page.keyboard.press("Enter")
@@ -173,7 +172,11 @@ def _x_login(page, username: str, password: str):
     pwd.fill(password)
     page.wait_for_timeout(1000)
     page.keyboard.press("Enter")
-    page.wait_for_url("**/home", timeout=30000)
+    # Save screenshot before wait_for_url so we can debug what X shows
+    page.wait_for_timeout(5000)
+    page.screenshot(path="/tmp/x_login_debug.png")
+    print(f"  Login debug screenshot saved. Current URL: {page.url}")
+    page.wait_for_url("**/home", timeout=20000)
     page.wait_for_timeout(2000)
 
 

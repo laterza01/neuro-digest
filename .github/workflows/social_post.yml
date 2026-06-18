@@ -31,3 +31,11 @@ jobs:
           X_PASSWORD:           ${{ secrets.X_PASSWORD }}
           ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
         run: python social_post.py
+
+      - name: Upload X login debug screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x-login-debug
+          path: /tmp/x_login_debug.png
+          if-no-files-found: ignore
