@@ -160,20 +160,25 @@ def post_facebook(cover_url: str, text: str, article_url: str, journal: str = ""
 def _x_login(page, username: str, password: str):
     """Perform X login flow on given page."""
     page.goto("https://x.com/i/flow/login", wait_until="domcontentloaded")
-    page.wait_for_timeout(3000)
+    page.wait_for_timeout(4000)
     inp = page.locator('input[name="username_or_email"]').first
     inp.wait_for(timeout=15000)
-    inp.click()
-    page.keyboard.type(username, delay=80)
-    page.wait_for_timeout(800)
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(3000)
+    # Use JS focus + fill to avoid overlay/intercept issues
+    page.evaluate('document.querySelector(\'input[name="username_or_email"]\').focus()')
+    inp.fill(username)
+    page.wait_for_timeout(1000)
+    # Click the Continue button (more reliable than pressing Enter)
+    btn = page.locator('button[data-testid="LoginForm_Login_Button"], button:has-text("Continue"), button:has-text("Next")').first
+    btn.click()
+    page.wait_for_timeout(4000)
     pwd = page.locator('input[name="password"]').first
-    pwd.wait_for(timeout=10000)
-    pwd.click()
-    page.keyboard.type(password, delay=60)
-    page.wait_for_timeout(500)
-    page.keyboard.press("Enter")
+    pwd.wait_for(timeout=15000)
+    page.evaluate('document.querySelector(\'input[name="password"]\').focus()')
+    pwd.fill(password)
+    page.wait_for_timeout(1000)
+    # Click the Log in button
+    login_btn = page.locator('button[data-testid="LoginForm_Login_Button"], button:has-text("Log in")').first
+    login_btn.click()
     page.wait_for_url("**/home", timeout=30000)
     page.wait_for_timeout(2000)
 
