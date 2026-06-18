@@ -17,9 +17,9 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt && playwright install chromium --with-deps
 
-      - name: Post to Instagram + Facebook
+      - name: Post to Instagram + Facebook + X
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -27,4 +27,6 @@ jobs:
           FB_PAGE_TOKEN:        ${{ secrets.FB_PAGE_TOKEN }}
           FB_PAGE_ID:           ${{ secrets.FB_PAGE_ID }}
           IG_ACCOUNT_ID:        ${{ secrets.IG_ACCOUNT_ID }}
+          X_USERNAME:           ${{ secrets.X_USERNAME }}
+          X_PASSWORD:           ${{ secrets.X_PASSWORD }}
         run: python social_post.py

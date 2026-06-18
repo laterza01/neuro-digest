@@ -280,7 +280,7 @@ if __name__ == "__main__":
             sb.table("social_posts")
               .select("*")
               .is_("posted_at", "null")
-              .or_("ig_approved.eq.true,fb_approved.eq.true,ig_story_approved.eq.true,fb_story_approved.eq.true")
+              .or_("ig_approved.eq.true,fb_approved.eq.true,ig_story_approved.eq.true,fb_story_approved.eq.true,x_approved.eq.true")
               .order("created_at", desc=True)
               .limit(1)
               .execute()
@@ -314,6 +314,8 @@ if __name__ == "__main__":
         do_fb_story       = bool(post.get("fb_story_approved"))
         do_ig_story_video = bool(post.get("ig_story_video_approved"))
         do_fb_story_video = bool(post.get("fb_story_video_approved"))
+        do_x              = bool(post.get("x_approved"))
+        x_post_id         = post.get("x_post_id")
         reel_url          = post.get("reel_url", "")
         story_cover_url   = post.get("story_cover_url") or slide_urls[0]
 
@@ -416,10 +418,23 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"  ✗ Facebook Story Video error: {e}")
 
+        # X (Twitter) — via Playwright on GitHub Actions (fresh IP, no rate limit)
+        if do_x and not x_post_id:
+            try:
+                print(f"\n[X] Posting to X (@neuro_digest)...")
+                x_post_id = post_x(fb_text, post["article_url"], story_cover_url)
+                print(f"  ✓ X posted: {x_post_id}")
+                something_posted = True
+            except Exception as e:
+                print(f"  ✗ X error: {e}")
+        elif x_post_id:
+            print(f"\n[X] Already posted on X — skipping")
+
         # Update Supabase — only set posted_at if something was actually published
         update_data = {
             "ig_post_id": ig_post_id,
             "fb_post_id": fb_post_id,
+            "x_post_id": x_post_id,
         }
         if something_posted:
             update_data["posted_at"] = datetime.now(timezone.utc).isoformat()

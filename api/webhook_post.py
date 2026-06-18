@@ -65,6 +65,7 @@ class handler(BaseHTTPRequestHandler):
             do_fb_story       = bool(post.get("fb_story_approved"))
             do_ig_story_video = bool(post.get("ig_story_video_approved"))
             do_fb_story_video = bool(post.get("fb_story_video_approved"))
+            do_x              = bool(post.get("x_approved"))
             reel_url          = post.get("reel_url", "")
             story_cover_url   = post.get("story_cover_url") or slide_urls[0]
 
@@ -141,8 +142,24 @@ class handler(BaseHTTPRequestHandler):
                 except Exception as e:
                     print(f"[webhook_post] ✗ FB Story Video: {e}")
 
+            # X (Twitter) — dispatched to GitHub Actions (Playwright + fresh IP)
+            x_post_id = post.get("x_post_id")
+            if do_x and not x_post_id:
+                try:
+                    gh_token = os.getenv("GH_TOKEN", "")
+                    dispatch_url = "https://api.github.com/repos/laterza01/neuro-digest/actions/workflows/social_post.yml/dispatches"
+                    dispatch_data = json.dumps({"ref": "main"}).encode()
+                    dispatch_req = urllib.request.Request(dispatch_url, data=dispatch_data)
+                    dispatch_req.add_header("Authorization", f"Bearer {gh_token}")
+                    dispatch_req.add_header("Accept", "application/vnd.github+json")
+                    dispatch_req.add_header("Content-Type", "application/json")
+                    with urllib.request.urlopen(dispatch_req, timeout=15) as r:
+                        print(f"[webhook_post] ✓ X: dispatched social_post.yml (status {r.status})")
+                except Exception as e:
+                    print(f"[webhook_post] ✗ X dispatch: {e}")
+
             # Save to Supabase
-            update_data = {"ig_post_id": ig_post_id, "fb_post_id": fb_post_id}
+            update_data = {"ig_post_id": ig_post_id, "fb_post_id": fb_post_id, "x_post_id": x_post_id if do_x else post.get("x_post_id")}
             if something_posted:
                 update_data["posted_at"] = datetime.now(timezone.utc).isoformat()
             sb.table("social_posts").update(update_data).eq("id", post_id).execute()
