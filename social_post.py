@@ -163,22 +163,16 @@ def _x_login(page, username: str, password: str):
     page.wait_for_timeout(4000)
     inp = page.locator('input[name="username_or_email"]').first
     inp.wait_for(timeout=15000)
-    # Use JS focus + fill to avoid overlay/intercept issues
-    page.evaluate('document.querySelector(\'input[name="username_or_email"]\').focus()')
+    # fill() focuses the element internally — no click needed, avoids overlay issues
     inp.fill(username)
     page.wait_for_timeout(1000)
-    # Click the Continue button (more reliable than pressing Enter)
-    btn = page.locator('button[data-testid="LoginForm_Login_Button"], button:has-text("Continue"), button:has-text("Next")').first
-    btn.click()
+    page.keyboard.press("Enter")
     page.wait_for_timeout(4000)
     pwd = page.locator('input[name="password"]').first
     pwd.wait_for(timeout=15000)
-    page.evaluate('document.querySelector(\'input[name="password"]\').focus()')
     pwd.fill(password)
     page.wait_for_timeout(1000)
-    # Click the Log in button
-    login_btn = page.locator('button[data-testid="LoginForm_Login_Button"], button:has-text("Log in")').first
-    login_btn.click()
+    page.keyboard.press("Enter")
     page.wait_for_url("**/home", timeout=30000)
     page.wait_for_timeout(2000)
 
