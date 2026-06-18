@@ -29,4 +29,5 @@ jobs:
           IG_ACCOUNT_ID:        ${{ secrets.IG_ACCOUNT_ID }}
           X_USERNAME:           ${{ secrets.X_USERNAME }}
           X_PASSWORD:           ${{ secrets.X_PASSWORD }}
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
         run: python social_post.py
