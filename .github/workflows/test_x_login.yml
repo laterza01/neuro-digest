@@ -1,0 +1,56 @@
+name: Test X Login
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install playwright python-dotenv && playwright install chromium --with-deps
+      - name: Test X login
+        env:
+          X_USERNAME: neuro_digest
+          X_PASSWORD: ${{ secrets.X_PASSWORD }}
+        run: |
+          python3 -c "
+from playwright.sync_api import sync_playwright
+import os
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+    context = browser.new_context(
+        user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        viewport={'width': 1280, 'height': 800},
+    )
+    page = context.new_page()
+    page.goto('https://x.com/i/flow/login', wait_until='domcontentloaded')
+    page.wait_for_timeout(3000)
+    inp = page.locator('input[name=\"username_or_email\"]').first
+    inp.wait_for(timeout=15000)
+    inp.click()
+    page.keyboard.type(os.environ['X_USERNAME'], delay=100)
+    page.wait_for_timeout(1000)
+    page.keyboard.press('Enter')
+    page.wait_for_timeout(4000)
+    body = page.inner_text('body')
+    if 'tardi' in body or 'temporarily' in body or 'limited' in body:
+        print('RATE LIMITED')
+    elif 'password' in body.lower() or 'parola' in body.lower():
+        print('OK - PASSWORD STEP REACHED')
+        pwd = page.locator('input[name=\"password\"]').first
+        pwd.click()
+        page.keyboard.type(os.environ['X_PASSWORD'], delay=60)
+        page.keyboard.press('Enter')
+        page.wait_for_timeout(5000)
+        if 'home' in page.url:
+            print('LOGIN OK - URL:', page.url)
+        else:
+            print('LOGIN FAILED - URL:', page.url)
+            print(page.inner_text('body')[:300])
+    else:
+        print('UNKNOWN STATE:', body[:200])
+    browser.close()
+"
