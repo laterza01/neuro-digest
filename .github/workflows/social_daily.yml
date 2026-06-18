@@ -1,8 +1,6 @@
 name: Social Daily Preview
 
 on:
-  schedule:
-    - cron: '0 6 * * *'   # Every day 6:00 UTC = 8:00 Italian time
   workflow_dispatch:
 
 jobs:

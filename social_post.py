@@ -156,6 +156,109 @@ def post_facebook(cover_url: str, text: str, article_url: str, journal: str = ""
     })
     return result.get("post_id", result.get("id", ""))
 
+# ── X (Twitter) ──────────────────────────────────────────────────────────────
+def _x_login(page, username: str, password: str):
+    """Perform X login flow on given page."""
+    page.goto("https://x.com/i/flow/login", wait_until="domcontentloaded")
+    page.wait_for_timeout(3000)
+    inp = page.locator('input[name="username_or_email"]').first
+    inp.wait_for(timeout=15000)
+    inp.click()
+    page.keyboard.type(username, delay=80)
+    page.wait_for_timeout(800)
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(3000)
+    pwd = page.locator('input[name="password"]').first
+    pwd.wait_for(timeout=10000)
+    pwd.click()
+    page.keyboard.type(password, delay=60)
+    page.wait_for_timeout(500)
+    page.keyboard.press("Enter")
+    page.wait_for_url("**/home", timeout=30000)
+    page.wait_for_timeout(2000)
+
+
+def post_x(text: str, article_url: str, cover_url: str = "") -> str:
+    """Post to X via Playwright (cookie-persistent session). Returns tweet ID."""
+    import tempfile, json, requests as req_lib
+    from playwright.sync_api import sync_playwright
+    from pathlib import Path
+
+    hashtags = "#neurology #neurodigest #neurologia"
+    body = text.strip()
+    url_part = f"\n\n{article_url}\n{hashtags}"
+    max_body = 280 - len(url_part)
+    if len(body) > max_body:
+        body = body[:max_body - 3] + "..."
+    tweet_text = body + url_part
+
+    x_username = os.getenv("X_USERNAME", "neuro_digest")
+    x_password = os.getenv("X_PASSWORD", "")
+    cookies_file = Path(__file__).parent / ".x_cookies.json"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 800},
+        )
+
+        # Load saved cookies if available
+        if cookies_file.exists():
+            cookies = json.loads(cookies_file.read_text())
+            context.add_cookies(cookies)
+            print("  Loaded saved X session cookies")
+
+        page = context.new_page()
+
+        # Check if we're already logged in
+        page.goto("https://x.com/home", wait_until="domcontentloaded")
+        page.wait_for_timeout(3000)
+        if "home" not in page.url or page.locator('[data-testid="tweetTextarea_0"]').count() == 0:
+            print("  X session expired — logging in...")
+            _x_login(page, x_username, x_password)
+            # Save cookies for next time
+            cookies_file.write_text(json.dumps(context.cookies()))
+            print("  X session cookies saved")
+
+        # Compose tweet
+        page.click('[data-testid="tweetTextarea_0"]')
+        page.wait_for_timeout(500)
+        page.keyboard.type(tweet_text, delay=20)
+
+        # Attach image if provided
+        if cover_url:
+            try:
+                img_data = req_lib.get(cover_url, timeout=30).content
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+                    f.write(img_data)
+                    tmp_path = f.name
+                with page.expect_file_chooser() as fc_info:
+                    page.click('[data-testid="fileInput"]')
+                fc_info.value.set_files(tmp_path)
+                page.wait_for_timeout(4000)
+            except Exception as e:
+                print(f"  ⚠ X image upload failed (posting without image): {e}")
+
+        # Post
+        page.click('[data-testid="tweetButtonInline"]')
+        page.wait_for_timeout(5000)
+
+        # Capture tweet ID from toast notification
+        tweet_id = "posted"
+        try:
+            page.wait_for_selector('[data-testid="toast"]', timeout=8000)
+            toast = page.locator('[data-testid="toast"] a[href*="/status/"]')
+            if toast.count() > 0:
+                href = toast.get_attribute("href")
+                tweet_id = href.split("/status/")[-1].split("?")[0]
+        except Exception:
+            pass
+
+        browser.close()
+
+    return tweet_id
+
 # ── Build Instagram caption ───────────────────────────────────────────────────
 def build_caption(post: dict) -> str:
     text = post.get("fb_text", "").strip()

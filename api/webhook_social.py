@@ -40,7 +40,7 @@ class handler(BaseHTTPRequestHandler):
             self._respond(500, f"Error: {str(e)}")
 
     def do_GET(self):
-        self._respond(200, "Webhook active")
+        self.do_POST()
 
     def _respond(self, code, body):
         encoded = body.encode("utf-8")
