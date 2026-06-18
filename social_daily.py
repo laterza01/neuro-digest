@@ -787,6 +787,59 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     })
     print(f"✓ Facebook preview sent")
 
+def send_x_email(content: dict, post_id: str):
+    """Email 4: X (Twitter) post preview with APPROVE button."""
+    title_short = content['article_title'][:55]
+    x_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=x"
+
+    hashtags = "#neurology #neurodigest #neurologia"
+    body = content['fb_text'].strip()
+    article_url = content['article_url']
+    url_part = f"\n\n{article_url}\n{hashtags}"
+    max_body = 280 - len(url_part)
+    if len(body) > max_body:
+        body = body[:max_body - 3] + "..."
+    tweet_preview = body + url_part
+
+    char_count = len(tweet_preview)
+    tweet_html = tweet_preview.replace('\n', '<br>')
+
+    html_x = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#f4f3f0;font-family:Helvetica,Arial,sans-serif">
+<div style="max-width:600px;margin:0 auto">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background:#000;border-top:3px solid #1d9bf0;border-radius:8px;margin-bottom:20px">
+    <tr><td style="padding:24px;text-align:center">
+      <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:2px;
+                text-transform:uppercase;color:#1d9bf0">X / Twitter Preview</p>
+      <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,.5)">{char_count}/280 caratteri</p>
+    </td></tr>
+  </table>
+  <div style="background:#fff;border:1px solid #e1e8ed;border-radius:12px;padding:20px 24px;margin-bottom:20px">
+    <p style="font-size:15px;color:#14171a;line-height:1.6;margin:0">{tweet_html}</p>
+  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background:#000;border-radius:8px;margin-bottom:12px">
+    <tr><td style="padding:20px;text-align:center">
+      <a href="{x_approve}"
+         style="display:inline-block;background:#1d9bf0;color:#fff;font-size:14px;
+                font-weight:700;text-decoration:none;padding:14px 40px;border-radius:25px">
+        ✅ &nbsp;APPROVE X Post
+      </a>
+    </td></tr>
+  </table>
+</div></body></html>"""
+
+    resend_lib.Emails.send({
+        "from":    from_addr,
+        "to":      PREVIEW_TO,
+        "subject": f"[X Preview] {title_short}",
+        "html":    html_x,
+        "text":    f"X Preview\n\n{tweet_preview}\n\nApprove: {x_approve}",
+    })
+    print(f"✓ X preview sent")
+
+
 def send_reel_email(content: dict, reel_url: str):
     """Email 3: Reel MP4 download link — user adds music and posts manually."""
     title_short = content['article_title'][:55]
@@ -1085,6 +1138,7 @@ def main():
     print("\n[6/6] Sending preview emails...")
     send_preview(content, slide_urls, post_id)
     send_reel_email(content, reel_url)
+    send_x_email(content, post_id)
 
     print("\n✓ Done!")
 

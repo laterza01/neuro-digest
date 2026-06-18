@@ -16,6 +16,7 @@ def set_approved(supabase_url: str, supabase_key: str, post_id: str, platform: s
         "fb_story":       "fb_story_approved",
         "ig_story_video": "ig_story_video_approved",
         "fb_story_video": "fb_story_video_approved",
+        "x":              "x_approved",
     }.get(platform, "approved")
     patch_url = f"{supabase_url}/rest/v1/social_posts?id=eq.{post_id}"
     data      = json.dumps({field: True}).encode()
