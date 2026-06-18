@@ -178,6 +178,28 @@ def _x_login(page, username: str, password: str):
     page.wait_for_timeout(2000)
 
 
+def _generate_x_body(fb_text: str, article_title: str = "") -> str:
+    """Generate tweet body via Claude (max ~200 chars, no URL/hashtags)."""
+    import anthropic
+    client = anthropic.Anthropic()
+    msg = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        messages=[{"role": "user", "content": f"""Write a tweet for @neuro_digest (neurology account). IN ENGLISH.
+
+Title: {article_title}
+Facebook text: {fb_text}
+
+MANDATORY FORMAT (max 200 chars total):
+1 sentence describing the clinical challenge — 1 sentence with a practical rule of thumb (\"Rule of thumb: ...\")
+
+Key: [key point in 5-8 words].
+
+Only this. No links, no hashtags, no intro."""}]
+    )
+    return msg.content[0].text.strip()
+
+
 def post_x(text: str, article_url: str, cover_url: str = "") -> str:
     """Post to X via Playwright (cookie-persistent session). Returns tweet ID."""
     import tempfile, json, requests as req_lib
@@ -185,11 +207,8 @@ def post_x(text: str, article_url: str, cover_url: str = "") -> str:
     from pathlib import Path
 
     hashtags = "#neurology #neurodigest #neurologia"
-    body = text.strip()
+    body = _generate_x_body(text)
     url_part = f"\n\n{article_url}\n{hashtags}"
-    max_body = 280 - len(url_part)
-    if len(body) > max_body:
-        body = body[:max_body - 3] + "..."
     tweet_text = body + url_part
 
     x_username = os.getenv("X_USERNAME", "neuro_digest")

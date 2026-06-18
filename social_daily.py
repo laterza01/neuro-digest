@@ -787,18 +787,37 @@ def send_preview(content: dict, slide_urls: list[str], post_id: str):
     })
     print(f"✓ Facebook preview sent")
 
+def generate_x_text(article_title: str, fb_text: str) -> str:
+    """Generate tweet body (without URL/hashtags) using Claude."""
+    import anthropic
+    client = anthropic.Anthropic()
+    msg = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        messages=[{"role": "user", "content": f"""Write a tweet for @neuro_digest (neurology account). IN ENGLISH.
+
+Title: {article_title}
+Facebook text: {fb_text}
+
+MANDATORY FORMAT (max 200 chars total):
+1 sentence describing the clinical challenge — 1 sentence with a practical rule of thumb (\"Rule of thumb: ...\")
+
+Key: [key point in 5-8 words].
+
+Only this. No links, no hashtags, no intro."""}]
+    )
+    return msg.content[0].text.strip()
+
+
 def send_x_email(content: dict, post_id: str):
     """Email 4: X (Twitter) post preview with APPROVE button."""
     title_short = content['article_title'][:55]
     x_approve = f"{SITE_URL}/api/social_approve?token={APPROVE_SECRET}&post_id={post_id}&platform=x"
 
     hashtags = "#neurology #neurodigest #neurologia"
-    body = content['fb_text'].strip()
     article_url = content['article_url']
+    body = generate_x_text(content['article_title'], content['fb_text'])
     url_part = f"\n\n{article_url}\n{hashtags}"
-    max_body = 280 - len(url_part)
-    if len(body) > max_body:
-        body = body[:max_body - 3] + "..."
     tweet_preview = body + url_part
 
     char_count = len(tweet_preview)
