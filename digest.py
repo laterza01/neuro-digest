@@ -978,7 +978,7 @@ def send_personalized_via_resend(
             sent += 1
             sent_addrs.append(email)
             skip_set.add(email)        # guard against duplicate entries in input list
-            time.sleep(0.15)
+            time.sleep(0.25)
         except Exception as e:
             print(f"  Resend error ({email}): {e}")
 
@@ -1490,7 +1490,7 @@ def send_guidelines_edition(
                     })
                     sent += 1
                     addrs.append(sub["email"])
-                    time.sleep(0.15)
+                    time.sleep(0.25)
                 except Exception as e:
                     print(f"  Resend error ({sub['email']}): {e}")
             if addrs:
@@ -1570,7 +1570,7 @@ def send_guidelines_edition(
             })
             sent += 1
             sent_addrs.append(email)
-            time.sleep(0.15)
+            time.sleep(0.25)
         except Exception as e:
             print(f"  Resend error ({email}): {e}")
 
