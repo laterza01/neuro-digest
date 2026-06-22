@@ -38,7 +38,7 @@ class handler(BaseHTTPRequestHandler):
                 sb.table("social_posts")
                   .select("*")
                   .is_("posted_at", "null")
-                  .or_("ig_approved.eq.true,fb_approved.eq.true,ig_story_approved.eq.true,fb_story_approved.eq.true")
+                  .or_("ig_approved.eq.true,fb_approved.eq.true,ig_story_approved.eq.true,fb_story_approved.eq.true,x_approved.eq.true")
                   .order("created_at", desc=True)
                   .limit(1)
                   .execute()

@@ -46,56 +46,69 @@ def graph_get(path: str, params: dict) -> dict:
 
 # ── Instagram carousel ────────────────────────────────────────────────────────
 def post_instagram_carousel(slide_urls: list[str], caption: str) -> str:
-    """Upload images, create carousel container, publish. Returns IG media ID."""
+    """Upload images, create carousel container, publish. Returns IG media ID. Retries up to 3 times."""
 
-    # 1. Create image containers
-    print("  Creating image containers...")
-    item_ids = []
-    for i, url in enumerate(slide_urls):
-        result = graph_post(f"{IG_ACCOUNT_ID}/media", {
-            "image_url":    url,
-            "is_carousel_item": True,
-            "access_token": FB_PAGE_TOKEN,
-        })
-        item_ids.append(result["id"])
-        print(f"    Image {i+1}/{len(slide_urls)}: {result['id']}")
-        time.sleep(1)
+    last_exc = None
+    for attempt in range(3):
+        if attempt > 0:
+            wait = 30 * attempt
+            print(f"  IG retry {attempt}/2 in {wait}s...")
+            time.sleep(wait)
+        try:
+            # 1. Create image containers
+            print("  Creating image containers...")
+            item_ids = []
+            for i, url in enumerate(slide_urls):
+                result = graph_post(f"{IG_ACCOUNT_ID}/media", {
+                    "image_url":    url,
+                    "is_carousel_item": True,
+                    "access_token": FB_PAGE_TOKEN,
+                })
+                item_ids.append(result["id"])
+                print(f"    Image {i+1}/{len(slide_urls)}: {result['id']}")
+                time.sleep(1)
 
-    # 2. Create carousel container
-    print("  Creating carousel container...")
-    carousel = graph_post(f"{IG_ACCOUNT_ID}/media", {
-        "media_type":   "CAROUSEL",
-        "children":     item_ids,
-        "caption":      caption,
-        "access_token": FB_PAGE_TOKEN,
-    })
-    carousel_id = carousel["id"]
-    print(f"  Carousel container: {carousel_id}")
+            # 2. Create carousel container
+            print("  Creating carousel container...")
+            carousel = graph_post(f"{IG_ACCOUNT_ID}/media", {
+                "media_type":   "CAROUSEL",
+                "children":     item_ids,
+                "caption":      caption,
+                "access_token": FB_PAGE_TOKEN,
+            })
+            carousel_id = carousel["id"]
+            print(f"  Carousel container: {carousel_id}")
 
-    # 3. Wait for processing
-    print("  Waiting for processing...")
-    for attempt in range(12):
-        time.sleep(5)
-        status = graph_get(carousel_id, {
-            "fields":       "status_code",
-            "access_token": FB_PAGE_TOKEN,
-        })
-        code = status.get("status_code", "IN_PROGRESS")
-        print(f"    Status: {code}")
-        if code == "FINISHED":
-            break
-        if code == "ERROR":
-            raise RuntimeError("Instagram media processing failed")
-    else:
-        raise RuntimeError("Instagram media processing timed out")
+            # 3. Wait for processing
+            print("  Waiting for processing...")
+            for _ in range(12):
+                time.sleep(5)
+                status = graph_get(carousel_id, {
+                    "fields":       "status_code",
+                    "access_token": FB_PAGE_TOKEN,
+                })
+                code = status.get("status_code", "IN_PROGRESS")
+                print(f"    Status: {code}")
+                if code == "FINISHED":
+                    break
+                if code == "ERROR":
+                    raise RuntimeError("Instagram media processing failed")
+            else:
+                raise RuntimeError("Instagram media processing timed out")
 
-    # 4. Publish
-    print("  Publishing carousel...")
-    result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
-        "creation_id":  carousel_id,
-        "access_token": FB_PAGE_TOKEN,
-    })
-    return result["id"]
+            # 4. Publish
+            print("  Publishing carousel...")
+            result = graph_post(f"{IG_ACCOUNT_ID}/media_publish", {
+                "creation_id":  carousel_id,
+                "access_token": FB_PAGE_TOKEN,
+            })
+            return result["id"]
+
+        except Exception as e:
+            last_exc = e
+            print(f"  IG attempt {attempt + 1}/3 failed: {e}")
+
+    raise RuntimeError(f"Instagram carousel failed after 3 attempts: {last_exc}")
 
 # ── Instagram Story (1 cover verticale 1080x1920) ────────────────────────────
 def post_instagram_story(story_cover_url: str) -> str:
@@ -157,31 +170,8 @@ def post_facebook(cover_url: str, text: str, article_url: str, journal: str = ""
     return result.get("post_id", result.get("id", ""))
 
 # ── X (Twitter) ──────────────────────────────────────────────────────────────
-def _x_login(page, username: str, password: str):
-    """Perform X login flow on given page."""
-    page.goto("https://x.com/i/flow/login", wait_until="domcontentloaded")
-    page.wait_for_timeout(4000)
-    inp = page.locator('input[name="username_or_email"]').first
-    inp.wait_for(timeout=15000)
-    inp.fill(username)
-    page.wait_for_timeout(1000)
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(4000)
-    pwd = page.locator('input[name="password"]').first
-    pwd.wait_for(timeout=15000)
-    pwd.fill(password)
-    page.wait_for_timeout(1000)
-    page.keyboard.press("Enter")
-    # Save screenshot before wait_for_url so we can debug what X shows
-    page.wait_for_timeout(5000)
-    page.screenshot(path="/tmp/x_login_debug.png")
-    print(f"  Login debug screenshot saved. Current URL: {page.url}")
-    page.wait_for_url("**/home", timeout=20000)
-    page.wait_for_timeout(2000)
-
-
 def _generate_x_body(fb_text: str, article_title: str = "") -> str:
-    """Generate tweet body via Claude (max ~200 chars, no URL/hashtags)."""
+    """Generate tweet body via Claude (max ~160 chars, no URL/hashtags)."""
     import anthropic
     client = anthropic.Anthropic()
     msg = client.messages.create(
@@ -205,80 +195,20 @@ No links, no hashtags. Output only the 4 lines above."""}]
 
 
 def post_x(text: str, article_url: str, cover_url: str = "") -> str:
-    """Post to X via Playwright (cookie-persistent session). Returns tweet ID."""
-    import tempfile, json, requests as req_lib
-    from playwright.sync_api import sync_playwright
-    from pathlib import Path
+    """Post to X via X API v2 (tweepy). Returns tweet ID."""
+    import tweepy
 
     body = _generate_x_body(text)
     tweet_text = f"{body}\n📄 {article_url}\n📬 neuro-digest.com\n#Neurology #NeuroDigest #ClinicalNeurology"
 
-    x_username = os.getenv("X_USERNAME", "neuro_digest")
-    x_password = os.getenv("X_PASSWORD", "")
-    cookies_file = Path(__file__).parent / ".x_cookies.json"
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800},
-        )
-
-        # Load saved cookies if available
-        if cookies_file.exists():
-            cookies = json.loads(cookies_file.read_text())
-            context.add_cookies(cookies)
-            print("  Loaded saved X session cookies")
-
-        page = context.new_page()
-
-        # Check if we're already logged in
-        page.goto("https://x.com/home", wait_until="domcontentloaded")
-        page.wait_for_timeout(3000)
-        if "home" not in page.url or page.locator('[data-testid="tweetTextarea_0"]').count() == 0:
-            print("  X session expired — logging in...")
-            _x_login(page, x_username, x_password)
-            # Save cookies for next time
-            cookies_file.write_text(json.dumps(context.cookies()))
-            print("  X session cookies saved")
-
-        # Compose tweet
-        page.click('[data-testid="tweetTextarea_0"]')
-        page.wait_for_timeout(500)
-        page.keyboard.type(tweet_text, delay=20)
-
-        # Attach image if provided
-        if cover_url:
-            try:
-                img_data = req_lib.get(cover_url, timeout=30).content
-                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-                    f.write(img_data)
-                    tmp_path = f.name
-                with page.expect_file_chooser() as fc_info:
-                    page.click('[data-testid="fileInput"]')
-                fc_info.value.set_files(tmp_path)
-                page.wait_for_timeout(4000)
-            except Exception as e:
-                print(f"  ⚠ X image upload failed (posting without image): {e}")
-
-        # Post
-        page.click('[data-testid="tweetButtonInline"]')
-        page.wait_for_timeout(5000)
-
-        # Capture tweet ID from toast notification
-        tweet_id = "posted"
-        try:
-            page.wait_for_selector('[data-testid="toast"]', timeout=8000)
-            toast = page.locator('[data-testid="toast"] a[href*="/status/"]')
-            if toast.count() > 0:
-                href = toast.get_attribute("href")
-                tweet_id = href.split("/status/")[-1].split("?")[0]
-        except Exception:
-            pass
-
-        browser.close()
-
-    return tweet_id
+    client = tweepy.Client(
+        consumer_key=os.getenv("X_API_KEY", ""),
+        consumer_secret=os.getenv("X_API_SECRET", ""),
+        access_token=os.getenv("X_ACCESS_TOKEN", ""),
+        access_token_secret=os.getenv("X_ACCESS_TOKEN_SECRET", ""),
+    )
+    response = client.create_tweet(text=tweet_text)
+    return str(response.data["id"])
 
 # ── Build Instagram caption ───────────────────────────────────────────────────
 def build_caption(post: dict) -> str:
@@ -295,13 +225,14 @@ if __name__ == "__main__":
     try:
         print("=== NeuroDigest Social Post ===")
 
-        # Fetch posts where at least one platform was EXPLICITLY approved by the user
-        # NOTE: 'approved' (old field) is ignored — only ig_approved and fb_approved count
+        # Fetch posts where X was approved but not yet posted.
+        # We do NOT filter by posted_at IS NULL because webhook_post.py (Vercel)
+        # may have already set posted_at when publishing IG/FB — we still need to post X.
         rows = (
             sb.table("social_posts")
               .select("*")
-              .is_("posted_at", "null")
-              .or_("ig_approved.eq.true,fb_approved.eq.true,ig_story_approved.eq.true,fb_story_approved.eq.true,x_approved.eq.true")
+              .eq("x_approved", True)
+              .is_("x_post_id", "null")
               .order("created_at", desc=True)
               .limit(1)
               .execute()
