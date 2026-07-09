@@ -69,18 +69,29 @@ FEEDS = [
 DAYS_BACK    = 14
 MAX_ARTICLES = 100  # total cap across all feeds
 OUTPUT_DIR   = Path("output") / datetime.now().strftime("%Y-%m-%d")
-EDITION_FILE = Path(__file__).resolve().parent / "edition.txt"
 
 
 # ── Edition counter ───────────────────────────────────────────────────────────
-def get_edition() -> int:
-    if EDITION_FILE.exists():
-        n = int(EDITION_FILE.read_text().strip())
-    else:
-        n = 0
-    n += 1
-    EDITION_FILE.write_text(str(n))
-    return n
+def get_edition(sb) -> int:
+    """
+    Next edition number, based on the highest edition_num already stored in Supabase.
+    (A local file doesn't work here — GitHub Actions/Vercel runs are ephemeral and
+    never persist filesystem writes back to the repo, so a file-based counter would
+    always reset to whatever's committed in git and get stuck on the same number.)
+    """
+    try:
+        rows = (
+            sb.table("digests")
+              .select("edition_num")
+              .order("edition_num", desc=True)
+              .limit(1)
+              .execute()
+        )
+        last = rows.data[0]["edition_num"] if rows.data and rows.data[0].get("edition_num") else 0
+    except Exception as e:
+        print(f"  Could not read last edition number: {e}")
+        last = 0
+    return last + 1
 
 
 # ── RSS fetching ──────────────────────────────────────────────────────────────
@@ -1591,6 +1602,41 @@ def send_guidelines_edition(
             print(f"  Could not log guidelines entry: {e}")
 
 
+def send_approval_reminder(digest_id: int) -> None:
+    """Alert the user by email when the Monday send is skipped because nobody approved the preview."""
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        return
+    approve_secret = os.getenv("APPROVE_SECRET", "")
+    site_url       = os.getenv("SITE_URL", "https://www.neuro-digest.com").rstrip("/")
+    approve_url    = f"{site_url}/api/approve?token={approve_secret}"
+    from_addr      = os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>")
+    try:
+        import resend
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from":    from_addr,
+            "to":      "vincenzolate95l@gmail.com",
+            "subject": "⚠️ Newsletter NON approvata — invio di oggi saltato",
+            "html": f"""
+            <div style="font-family:Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+              <h2 style="color:#c0392b">La newsletter di oggi non è stata inviata</h2>
+              <p style="color:#333;font-size:14px;line-height:1.6">
+                Era l'ora dell'invio settimanale ma il digest #{digest_id} non risulta approvato.
+                Nessuna email è stata mandata ai subscriber.
+              </p>
+              <a href="{approve_url}"
+                 style="display:inline-block;background:#0e7c5a;color:#fff;font-size:14px;
+                        font-weight:700;text-decoration:none;padding:14px 32px;border-radius:2px;margin-top:12px">
+                ✅ Approva e invia ora
+              </a>
+            </div>""",
+        })
+        print(f"  ⚠️  Reminder email sent (digest #{digest_id} not approved)")
+    except Exception as e:
+        print(f"  Could not send approval reminder: {e}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def run(generate_only: bool = False):
     """
@@ -1645,6 +1691,7 @@ def run(generate_only: bool = False):
                 if not approved:
                     print("  Newsletter not approved yet — waiting for APPROVE click.")
                     print("  Nothing sent. Will retry next cron run.")
+                    send_approval_reminder(rows.data[0]["id"])
                     return
                 print("  ✅ Approved — proceeding with send.")
             else:
@@ -1684,7 +1731,7 @@ def run(generate_only: bool = False):
               f"(edition #{edition}, id={digest_id}) — skipping synthesis.")
     else:
         client  = anthropic.Anthropic(api_key=api_key)
-        edition = get_edition()
+        edition = get_edition(sb)
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
         print("Fetching RSS feeds...")
