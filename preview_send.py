@@ -24,6 +24,9 @@ GH_TOKEN       = os.getenv("GH_TOKEN", "")
 APPROVE_SECRET = os.getenv("APPROVE_SECRET", "")
 SITE_URL_BASE  = os.getenv("SITE_URL", "https://neuro-digest-phi.vercel.app").rstrip("/")
 
+if not APPROVE_SECRET:
+    sys.exit("APPROVE_SECRET is not set — refusing to send a preview with a broken APPROVE link.")
+
 sb             = create_client(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_KEY", ""))
 resend_lib.api_key = os.getenv("RESEND_API_KEY", "")
 from_addr      = os.getenv("RESEND_FROM", "NeuroDigest <digest@neurodigest.io>")

@@ -47,6 +47,7 @@ jobs:
           RESEND_API_KEY:       ${{ secrets.RESEND_API_KEY }}
           RESEND_FROM:          ${{ secrets.RESEND_FROM }}
           JWT_SECRET:           ${{ secrets.JWT_SECRET }}
+          APPROVE_SECRET:       ${{ secrets.APPROVE_SECRET }}
           SITE_URL:             ${{ secrets.SITE_URL }}
           GH_TOKEN:             ${{ secrets.GH_TOKEN }}
           NOTION_TOKEN:         ${{ secrets.NOTION_TOKEN }}
