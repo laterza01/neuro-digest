@@ -705,10 +705,64 @@ def filter_for_monday_send(subscribers: list[dict]) -> list[dict]:
 
 # ── Notion integration ────────────────────────────────────────────────────────
 
+def _notion_query_urls(extra_filter: dict | None = None) -> set[str]:
+    """Paginate the Notion articles DB and return the set of URLs present, optionally filtered."""
+    notion_token = os.getenv("NOTION_TOKEN", "")
+    notion_db_id = os.getenv("NOTION_DATABASE_ID", "")
+    if not notion_token or not notion_db_id:
+        return set()
+
+    import urllib.request as _req
+    urls: set[str] = set()
+    has_more, start_cursor = True, None
+    while has_more:
+        payload: dict = {"page_size": 100}
+        if extra_filter:
+            payload["filter"] = extra_filter
+        if start_cursor:
+            payload["start_cursor"] = start_cursor
+        req = _req.Request(
+            f"https://api.notion.com/v1/databases/{notion_db_id}/query",
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {notion_token}",
+                     "Notion-Version": "2022-06-28",
+                     "Content-Type": "application/json"}
+        )
+        try:
+            with _req.urlopen(req, timeout=30) as r:
+                resp = json.loads(r.read())
+        except Exception as e:
+            print(f"  Could not query Notion URLs: {e}")
+            break
+        for p in resp.get("results", []):
+            url = p["properties"].get("URL", {}).get("url", "") or ""
+            if url:
+                urls.add(url)
+        has_more = resp.get("has_more", False)
+        start_cursor = resp.get("next_cursor")
+    return urls
+
+
+def get_all_notion_urls() -> set[str]:
+    """Every URL already present in Notion, regardless of status — used to avoid duplicate pages."""
+    return _notion_query_urls()
+
+
+def get_notion_used_mail_urls() -> set[str]:
+    """URLs already covered by a previous newsletter (Status=Used, Use for contains Mail)."""
+    return _notion_query_urls({
+        "and": [
+            {"property": "Status", "select": {"equals": "Used"}},
+            {"property": "Use for", "multi_select": {"contains": "Mail"}},
+        ]
+    })
+
+
 def save_articles_to_notion(digest_data: dict) -> int:
     """
     Save synthesized articles to the Notion NeuroDigest Articles database.
     Each article from each section is saved with topic, journal, summary, URL.
+    Skips articles whose URL already exists in Notion, to avoid duplicate pages.
     Returns number of articles saved.
     """
     notion_token = os.getenv("NOTION_TOKEN", "")
@@ -720,6 +774,7 @@ def save_articles_to_notion(digest_data: dict) -> int:
     import urllib.request as _req
     week_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     saved = 0
+    existing_urls = get_all_notion_urls()
     sections = digest_data.get("sections", [])
     print(f"  Processing {len(sections)} sections...")
 
@@ -740,6 +795,8 @@ def save_articles_to_notion(digest_data: dict) -> int:
 
             if not title:
                 continue
+            if url and url in existing_urls:
+                continue  # already in Notion — skip to avoid a duplicate page
 
             # Map topic to Notion select option
             topic_map = {
@@ -790,6 +847,8 @@ def save_articles_to_notion(digest_data: dict) -> int:
                 with _req.urlopen(request) as r:
                     if r.status == 200:
                         saved += 1
+                        if url:
+                            existing_urls.add(url)  # avoid a second page for the same URL later in this same run
             except Exception as e:
                 print(f"  Notion error for '{title[:50]}': {e}")
 
@@ -1758,6 +1817,14 @@ def run(generate_only: bool = False):
         print("Fetching RSS feeds...")
         all_articles = fetch_all_articles()
         articles     = select_articles(all_articles)
+
+        print("Excluding articles already covered in a previous newsletter...")
+        used_urls    = get_notion_used_mail_urls()
+        before_count = len(articles)
+        articles     = [a for a in articles if a["link"] not in used_urls]
+        print(f"  {before_count - len(articles)} already-covered article(s) excluded "
+              f"({len(used_urls)} previously used) — {len(articles)} remain")
+
         print(f"Total: {len(articles)} articles selected for synthesis\n")
 
         print("Synthesizing full neurology digest with Claude...")
