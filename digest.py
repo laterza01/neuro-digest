@@ -1677,6 +1677,10 @@ def run(generate_only: bool = False):
     eligible = list(all_subscribers)
 
     # ── Check approval flag ───────────────────────────────────────────────────
+    # approved_digest_id is remembered so Step 1 below sends THIS exact digest —
+    # never a freshly (re)generated one — since this is the content the user
+    # actually reviewed and approved.
+    approved_digest_id: int | None = None
     if not generate_only and not is_last_monday_of_month():
         try:
             rows = (
@@ -1693,6 +1697,7 @@ def run(generate_only: bool = False):
                     print("  Nothing sent. Will retry next cron run.")
                     send_approval_reminder(rows.data[0]["id"])
                     return
+                approved_digest_id = rows.data[0]["id"]
                 print("  ✅ Approved — proceeding with send.")
             else:
                 print("  ❌ No digest found in Supabase — cannot verify approval. Exiting.")
@@ -1715,8 +1720,24 @@ def run(generate_only: bool = False):
 
     # ── ALL OTHER MONDAYS → Weekly Digest ────────────────────────────────────
 
-    # Step 1: generate digest once per day; reuse on subsequent runs
-    existing = get_todays_digest(sb)
+    # Step 1: fetch the digest to send.
+    # Send mode (Monday): always reuse the EXACT digest that was just verified
+    # as approved above — never regenerate, since the approved digest is what
+    # the user actually reviewed (it was created on Sunday, a different UTC
+    # date than "today", so a same-day lookup would miss it and silently send
+    # unreviewed fresh content instead).
+    # Generate-only mode (Sunday preview): reuse today's if already generated
+    # this run-cycle, else create fresh.
+    if approved_digest_id is not None:
+        row = (
+            sb.table("digests")
+              .select("id,edition_num,html,plain,digest_json")
+              .eq("id", approved_digest_id)
+              .execute()
+        )
+        existing = row.data[0] if row.data else None
+    else:
+        existing = get_todays_digest(sb)
 
     if existing:
         digest_id   = existing["id"]
