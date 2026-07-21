@@ -1794,7 +1794,14 @@ def run(generate_only: bool = False):
               .eq("id", approved_digest_id)
               .execute()
         )
-        existing = row.data[0] if row.data else None
+        if not row.data:
+            # Send mode with a confirmed approved_digest_id that can't be refetched.
+            # Do NOT fall through to regeneration — that would send fresh, unreviewed
+            # content. Abort instead; the next cron run will retry.
+            print(f"  ❌ CRITICAL: approved digest #{approved_digest_id} could not be "
+                  f"refetched — aborting to avoid sending unreviewed content.")
+            return
+        existing = row.data[0]
     else:
         existing = get_todays_digest(sb)
 
