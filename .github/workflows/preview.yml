@@ -2,7 +2,7 @@ name: Email Preview
 
 on:
   schedule:
-    - cron: '0 18 * * 0'   # Triggered by Vercel Cron — Sunday 18:00 UTC = 20:00 Italian
+    - cron: '0 6 * * 1'   # Triggered by Vercel Cron — Monday 06:00 UTC = 08:00 Italian
   workflow_dispatch:
 
 jobs:

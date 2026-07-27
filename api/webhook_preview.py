@@ -1,5 +1,5 @@
 """
-Webhook endpoint for Vercel Cron (Sunday 18:00 UTC).
+Webhook endpoint for Vercel Cron (Monday 06:00 UTC).
 Generates newsletter preview and sends to user — NO GitHub Actions dependency.
 """
 import os

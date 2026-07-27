@@ -1,7 +1,7 @@
 """
 Sends a preview of the latest digest to vincenzolate95l@gmail.com.
 Includes an APPROVE button that triggers the main send via GitHub Actions.
-Runs automatically every Monday at 11:00 UTC (13:00 Italian time).
+Runs automatically every Monday at 06:00 UTC (08:00 Italian time).
 """
 import os, json, sys
 from pathlib import Path

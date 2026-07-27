@@ -1,5 +1,5 @@
 """
-Vercel Cron — Sunday 18:00 UTC (20:00 Italian).
+Vercel Cron — Monday 06:00 UTC (08:00 Italian).
 Triggers the GitHub Actions preview workflow (preview_send.py).
 """
 import os, json, urllib.request

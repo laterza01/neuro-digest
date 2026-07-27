@@ -1790,13 +1790,13 @@ def run(generate_only: bool = False):
     # ── ALL OTHER MONDAYS → Weekly Digest ────────────────────────────────────
 
     # Step 1: fetch the digest to send.
-    # Send mode (Monday): always reuse the EXACT digest that was just verified
-    # as approved above — never regenerate, since the approved digest is what
-    # the user actually reviewed (it was created on Sunday, a different UTC
-    # date than "today", so a same-day lookup would miss it and silently send
-    # unreviewed fresh content instead).
-    # Generate-only mode (Sunday preview): reuse today's if already generated
-    # this run-cycle, else create fresh.
+    # Send mode (Monday 12:00 UTC): always reuse the EXACT digest that was just
+    # verified as approved above — never regenerate, since the approved digest
+    # is what the user actually reviewed. (Fetching by id rather than "today's
+    # digest" also protects against edge cases where approval and send fall on
+    # different UTC dates.)
+    # Generate-only mode (Monday 06:00 UTC preview): reuse today's if already
+    # generated this run-cycle, else create fresh.
     if approved_digest_id is not None:
         row = (
             sb.table("digests")
@@ -1878,7 +1878,7 @@ def run(generate_only: bool = False):
             print("  Warning: could not persist digest to Supabase")
             digest_id = None
 
-        # If generate_only (Sunday preview mode) — stop here, don't send
+        # If generate_only (Monday 06:00 UTC preview mode) — stop here, don't send
         if generate_only:
             print("\n✓ Generate-only mode — digest saved, articles on Notion. Preview will follow.")
             return
@@ -1968,7 +1968,7 @@ def _mark_notion_articles_used_mail(digest_data: dict) -> None:
 if __name__ == "__main__":
     import sys as _sys
     if "--generate-only" in _sys.argv:
-        # Sunday mode: generate newsletter + save to Supabase + save articles to Notion
+        # Monday 06:00 UTC preview mode: generate newsletter + save to Supabase + save articles to Notion
         # Does NOT send to subscribers (approved flag not set yet)
         run(generate_only=True)
     else:
