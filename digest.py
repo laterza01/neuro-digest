@@ -548,7 +548,9 @@ def build_html_email(digest: dict, edition: int,
         '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
         'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Facebook</a> '
         '<a href="https://www.instagram.com/neurodigest_official/" '
-        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Instagram</a>'
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Instagram</a> '
+        '<a href="https://x.com/drvincehealth" '
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">X</a>'
     )
 
     return f"""<!DOCTYPE html>
@@ -1383,6 +1385,14 @@ def build_guidelines_html_email(
         if token else ""
     )
     sep           = ' &nbsp;&middot;&nbsp; ' if manage_link and unsub_link else ''
+    social_links  = (
+        '<a href="https://www.facebook.com/profile.php?id=61589980587224" '
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Facebook</a> '
+        '<a href="https://www.instagram.com/neurodigest_official/" '
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">Instagram</a> '
+        '<a href="https://x.com/drvincehealth" '
+        'target="_blank" style="color:#888;text-decoration:none;margin:0 8px;font-size:13px;font-weight:600">X</a>'
+    )
     visuals_block = kwargs.get("visuals_block", "")
     preheader_txt = guideline.get("bottom_line") or f"Guidelines Edition — {specific}"
 
