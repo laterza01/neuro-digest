@@ -449,9 +449,38 @@ def topic_section_html(topic: str, data: dict, color: str = ACC) -> str:
     </td></tr>"""
 
 
+# Standing announcement appended to every weekly issue, after the Take-Home
+# and before the footer. Added 2026-07 at the author's request — keep until
+# told to remove it.
+CLEAREEG_ANNOUNCEMENT_HTML = """
+<tr><td class="ep" style="padding:28px 48px 0">
+  <div style="border-top:1px solid #e8e8e4"></div>
+</td></tr>
+<tr><td style="padding:26px 48px;background:#faf9f7">
+  <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#333;
+            font-family:Georgia,'Times New Roman',serif">ClearEEG &mdash; practice tool in development</p>
+  <p style="margin:0 0 14px;font-size:12px;font-style:italic;color:#888;
+            font-family:Georgia,'Times New Roman',serif">A note on something I'm building alongside NeuroDigest.</p>
+  <p style="margin:0 0 12px;font-size:13px;line-height:1.75;color:#555;
+            font-family:Georgia,'Times New Roman',serif">ClearEEG puts a real EEG recording on screen. You page
+    through it and mark what you see: circle a finding, measure how long a seizure lasts, count the background
+    rhythm. Your read is then checked against the expert annotations already attached to that recording in the
+    research database it comes from &mdash; not against a model's own reading of the image &mdash; and explained.</p>
+  <p style="margin:0 0 14px;font-size:13px;line-height:1.75;color:#555;
+            font-family:Georgia,'Times New Roman',serif">It's aimed at residents, neurologists who don't read EEG
+    daily, and EEG technicians. Still in development; the waitlist is open if it would be useful to you.</p>
+  <a href="https://cleareeg.vercel.app?src=newsletter"
+     style="font-size:13px;color:#0e7c5a;font-weight:700;text-decoration:none;
+            font-family:Helvetica,Arial,sans-serif">cleareeg.vercel.app &rarr;</a>
+  <p style="margin:12px 0 0;font-size:10px;color:#aaa;line-height:1.6;
+            font-family:Helvetica,Arial,sans-serif">Educational tool. Not a medical device.</p>
+</td></tr>"""
+
+
 def build_html_email(digest: dict, edition: int,
                      preferences_token: str = "", site_url: str = "",
-                     also_this_week: list[dict] | None = None) -> str:
+                     also_this_week: list[dict] | None = None,
+                     announcement_html: str = CLEAREEG_ANNOUNCEMENT_HTML) -> str:
     date_str      = datetime.now().strftime("%B %d, %Y")
     single_action = digest.get("bottom_line", "")
     preheader_txt = single_action or "Your weekly neurology literature briefing."
@@ -609,6 +638,9 @@ def build_html_email(digest: dict, edition: int,
 
     <!-- ── Take-Home ────────────────────────────────────────────────────── -->
     {action_html}
+
+    <!-- ── Announcement (one-off, unrelated to this week's literature) ───── -->
+    {announcement_html}
 
     <!-- ── Footer ───────────────────────────────────────────────────────── -->
     <tr><td class="ft" style="padding:22px 48px;background:#f5f5f3;
