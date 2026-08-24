@@ -471,7 +471,7 @@ CLEAREEG_ANNOUNCEMENT_HTML = """
     daily, and EEG technicians. Still in development; the waitlist is open if it would be useful to you.</p>
   <a href="https://cleareeg.vercel.app?src=newsletter"
      style="font-size:13px;color:#0e7c5a;font-weight:700;text-decoration:none;
-            font-family:Helvetica,Arial,sans-serif">cleareeg.vercel.app &rarr;</a>
+            font-family:Helvetica,Arial,sans-serif">Join the ClearEEG waitlist &rarr;</a>
   <p style="margin:12px 0 0;font-size:10px;color:#aaa;line-height:1.6;
             font-family:Helvetica,Arial,sans-serif">Educational tool. Not a medical device.</p>
 </td></tr>"""
@@ -636,11 +636,15 @@ def build_html_email(digest: dict, edition: int,
 
     <tr><td style="padding:16px 0 0"></td></tr>
 
+    <!-- ── Announcement (unrelated to this week's literature) ─────────────
+         Kept ABOVE the Take-Home on purpose: this block is byte-identical in
+         every issue, and Gmail collapses identical *trailing* content behind
+         a "..." quote-trim button. Sitting before the Take-Home (which changes
+         weekly) keeps it expanded by default. Don't move it back down. -->
+    {announcement_html}
+
     <!-- ── Take-Home ────────────────────────────────────────────────────── -->
     {action_html}
-
-    <!-- ── Announcement (one-off, unrelated to this week's literature) ───── -->
-    {announcement_html}
 
     <!-- ── Footer ───────────────────────────────────────────────────────── -->
     <tr><td class="ft" style="padding:22px 48px;background:#f5f5f3;
@@ -1910,10 +1914,18 @@ def run(generate_only: bool = False):
             print("  Warning: could not persist digest to Supabase")
             digest_id = None
 
-        # If generate_only (Monday 06:00 UTC preview mode) — stop here, don't send
-        if generate_only:
-            print("\n✓ Generate-only mode — digest saved, articles on Notion. Preview will follow.")
-            return
+    # Generate-only mode: STOP HERE — never send, regardless of whether the
+    # digest was freshly synthesised above or reused from earlier today.
+    #
+    # This guard used to live inside the `else` branch, so a run that found an
+    # existing digest fell straight through to the send below. Combined with the
+    # approval check further up being skipped when generate_only=True, that made
+    # `--generate-only` send to the entire subscriber list with no approval —
+    # which is exactly what happened on 2026-08-03 (407 subscribers).
+    # The Sunday preview cron runs this flag: keep this return outside the else.
+    if generate_only:
+        print("\n✓ Generate-only mode — digest saved, articles on Notion. Preview will follow.")
+        return
 
     # Step 2: deduplication
     already_sent: set[str] = set()
