@@ -481,7 +481,7 @@ CLEAREEG_ANNOUNCEMENT_HTML = """
 def build_html_email(digest: dict, edition: int,
                      preferences_token: str = "", site_url: str = "",
                      also_this_week: list[dict] | None = None,
-                     announcement_html: str = CLEAREEG_ANNOUNCEMENT_HTML) -> str:
+                     announcement_html: str = "") -> str:  # CLEAREEG_ANNOUNCEMENT_HTML paused 2026-08 at author's request
     date_str      = datetime.now().strftime("%B %d, %Y")
     single_action = digest.get("bottom_line", "")
     preheader_txt = single_action or "Your weekly neurology literature briefing."
