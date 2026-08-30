@@ -470,7 +470,7 @@ CLEAREEG_ANNOUNCEMENT_HTML = """
   <p style="margin:0 0 14px;font-size:13px;line-height:1.75;color:#555;
             font-family:Georgia,'Times New Roman',serif">It's aimed at residents, neurologists who don't read EEG
     daily, and EEG technicians.</p>
-  <a href="https://cleareeg.com?src=newsletter"
+  <a href="https://cleareeg.com"
      style="font-size:13px;color:#0e7c5a;font-weight:700;text-decoration:none;
             font-family:Helvetica,Arial,sans-serif">Try ClearEEG &rarr;</a>
   <p style="margin:12px 0 0;font-size:10px;color:#aaa;line-height:1.6;
