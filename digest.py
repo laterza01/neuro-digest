@@ -458,20 +458,21 @@ CLEAREEG_ANNOUNCEMENT_HTML = """
 </td></tr>
 <tr><td style="padding:26px 48px;background:#faf9f7">
   <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#333;
-            font-family:Georgia,'Times New Roman',serif">ClearEEG &mdash; practice tool in development</p>
+            font-family:Georgia,'Times New Roman',serif">ClearEEG &mdash; now live</p>
   <p style="margin:0 0 14px;font-size:12px;font-style:italic;color:#888;
-            font-family:Georgia,'Times New Roman',serif">A note on something I'm building alongside NeuroDigest.</p>
+            font-family:Georgia,'Times New Roman',serif">A tool I've been building alongside NeuroDigest is ready.</p>
   <p style="margin:0 0 12px;font-size:13px;line-height:1.75;color:#555;
             font-family:Georgia,'Times New Roman',serif">ClearEEG puts a real EEG recording on screen. You page
     through it and mark what you see: circle a finding, measure how long a seizure lasts, count the background
-    rhythm. Your read is then checked against the expert annotations already attached to that recording in the
-    research database it comes from &mdash; not against a model's own reading of the image &mdash; and explained.</p>
+    rhythm. Your read is checked against the expert annotations already attached to that recording in the
+    research database it comes from &mdash; not against a model's own reading of the image &mdash; and explained
+    afterward, with a built-in glossary to go back to when you need it.</p>
   <p style="margin:0 0 14px;font-size:13px;line-height:1.75;color:#555;
             font-family:Georgia,'Times New Roman',serif">It's aimed at residents, neurologists who don't read EEG
-    daily, and EEG technicians. Still in development; the waitlist is open if it would be useful to you.</p>
-  <a href="https://cleareeg.com/waitlist?src=newsletter"
+    daily, and EEG technicians.</p>
+  <a href="https://cleareeg.com?src=newsletter"
      style="font-size:13px;color:#0e7c5a;font-weight:700;text-decoration:none;
-            font-family:Helvetica,Arial,sans-serif">Join the ClearEEG waitlist &rarr;</a>
+            font-family:Helvetica,Arial,sans-serif">Try ClearEEG &rarr;</a>
   <p style="margin:12px 0 0;font-size:10px;color:#aaa;line-height:1.6;
             font-family:Helvetica,Arial,sans-serif">Educational tool. Not a medical device.</p>
 </td></tr>"""
