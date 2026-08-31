@@ -37,7 +37,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(500, f"Error: {str(e)}")
 
     def do_GET(self):
-        self._respond(200, "Webhook is active")
+        # Vercel Cron sends GET, not POST — must run the same send logic.
+        self.do_POST()
 
     def _respond(self, code, body):
         encoded = body.encode("utf-8")
