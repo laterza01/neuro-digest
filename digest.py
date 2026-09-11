@@ -171,7 +171,13 @@ def synthesize_all(articles: list[dict], client: anthropic.Anthropic) -> dict:
 
     articles_text = ""
     for i, a in enumerate(articles, 1):
-        abstract = a['summary'][:250] if a['summary'] else "(no abstract)"
+        # Use the FULL abstract already fetched (up to 1200 chars, see fetch_feed).
+        # Previously this was re-truncated to 250 chars here, which routinely cut
+        # abstracts off before the Results/Conclusion sentences — leaving only the
+        # Background/Objective. That caused the synthesis to default to the
+        # "expected" direction of a finding instead of the actual reported one
+        # (e.g. writing up a null/negative trial as if it showed benefit).
+        abstract = a['summary'] if a['summary'] else "(no abstract)"
         articles_text += (
             f"\n[{i}] {a['title']} | {a['journal']} | {a['pub_date']}\n"
             f"    URL: {a['link']}\n"
@@ -215,6 +221,19 @@ Rules:
 - Implication: action-oriented
 - Sources: only articles you actually cite; include doi when you can extract it from the URL or know it
 
+CRITICAL — reporting accuracy:
+- State ONLY what the abstract text actually reports. Never assume, infer, or default
+  to the "expected" or hypothesized direction of a result.
+- If an abstract reports NO significant difference, a NEGATIVE trial, or net harm
+  (e.g. more hemorrhage/adverse events), say so plainly. Do not describe it as showing
+  benefit, efficacy, or an "extension" of benefit to a new population.
+- If an abstract is truncated or too thin to tell what was actually found (e.g. it
+  only states the study question, not the result), do NOT invent a result — either
+  skip that article or explicitly note the finding is unclear from the available text.
+- Every clinical claim about whether something worked, was safe, or changed an
+  outcome must be traceable to an explicit statement in that abstract — not to what
+  a reader might expect a trial like this to show.
+
 Articles this week:
 {articles_text}"""
 
@@ -232,6 +251,86 @@ Articles this week:
         return json.loads(raw)
     except json.JSONDecodeError:
         return {"sections": [], "bottom_line": "Synthesis unavailable this week."}
+
+
+def verify_digest_against_sources(
+    digest_data: dict, articles: list[dict], client: anthropic.Anthropic
+) -> dict:
+    """
+    Second pass, run after synthesize_all(): re-checks every theme's body/implication
+    against the actual abstract text of the sources it cites, and rewrites anything
+    that misrepresents a finding's direction or significance (e.g. describing a null
+    or negative trial as showing benefit). Added 2026-09 after a subscriber flagged a
+    digest that claimed thrombectomy "extended benefit" to a population where the
+    cited trial actually found no significant difference and more hemorrhage.
+
+    Returns the corrected digest_data, or the original unchanged if nothing needed
+    fixing or the verification call itself fails (never block a send on this step
+    erroring — fall back to the unverified digest rather than crash the run).
+    """
+    by_url = {a["link"]: a for a in articles if a.get("link")}
+
+    cited_urls = set()
+    for sec in digest_data.get("sections", []):
+        for src in sec.get("sources", []):
+            if src.get("url"):
+                cited_urls.add(src["url"])
+
+    sources_block = ""
+    for url in cited_urls:
+        art = by_url.get(url)
+        if art:
+            sources_block += f"\nURL: {url}\nTITLE: {art['title']}\nABSTRACT: {art['summary']}\n"
+
+    if not sources_block:
+        return digest_data
+
+    prompt = f"""You are fact-checking a neurology newsletter before it goes out to subscribers,
+including practicing physicians. Below is the generated digest (JSON) and the original
+abstract text of every article it cites.
+
+For every theme in every section, check whether "body" and "implication" accurately
+reflect the direction and statistical significance actually reported in the matching
+abstract(s) below — in particular whether a treatment/intervention is reported as
+beneficial, harmful, or showing no significant difference. Do not accept a claim just
+because it sounds plausible for this type of study; check it against the abstract text.
+
+Common failure to catch: a trial that reports "no significant difference" or net harm
+(e.g. more hemorrhage, more adverse events) being described in the digest as showing
+benefit, efficacy, or an "extension" of benefit to a new population or subgroup. If you
+find this, rewrite the theme to state the actual reported result.
+
+If everything already matches the abstracts, return the digest JSON completely unchanged.
+If something misrepresents a finding, rewrite ONLY that theme's "body" and "implication"
+(and the section "headline" if it depends on the same claim) to match what the abstract
+actually reports. Keep the same JSON structure, all other fields, and all other
+sections/themes exactly as given.
+
+Return ONLY the corrected digest JSON — no markdown fences, no commentary.
+
+ORIGINAL ABSTRACTS:
+{sources_block}
+
+GENERATED DIGEST:
+{json.dumps(digest_data)}"""
+
+    try:
+        response = client.messages.create(
+            model="claude-opus-4-7",
+            max_tokens=16000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        if not response.content:
+            return digest_data
+        raw = response.content[0].text.strip()
+        raw = re.sub(r"^```[a-z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+        corrected = json.loads(raw)
+        if corrected.get("sections"):
+            return corrected
+    except Exception as e:
+        print(f"  Verification pass failed, keeping unverified digest: {e}")
+    return digest_data
 
 
 # ── HTML email builder ────────────────────────────────────────────────────────
@@ -1883,6 +1982,10 @@ def run(generate_only: bool = False):
 
         print("Synthesizing full neurology digest with Claude...")
         digest_data = synthesize_all(articles, client)
+
+        print("Verifying claims against source abstracts...")
+        digest_data = verify_digest_against_sources(digest_data, articles, client)
+
         sections    = digest_data.get("sections", [])
         print(f"  {len(sections)} clinical areas identified")
         for s in sections:
