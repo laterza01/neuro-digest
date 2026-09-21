@@ -1992,6 +1992,15 @@ def run(generate_only: bool = False):
             print(f"  · {s['topic']} ({len(s.get('themes', []))} themes)")
         print(f"  Bottom line: {digest_data.get('bottom_line','')[:80]}...")
 
+        print("Checking for article overlap with recent issues...")
+        overlap_warnings = check_recent_article_overlap(digest_data, sb)
+        if overlap_warnings:
+            print(f"  ⚠️  OVERLAP WITH RECENT ISSUES — {len(overlap_warnings)} article(s) repeated:")
+            for w in overlap_warnings:
+                print(f"    - {w}")
+        else:
+            print("  No overlap with recent issues.")
+
         site_url = os.getenv("SITE_URL", "https://www.neuro-digest.com")
         html  = build_html_email(digest_data, edition, site_url=site_url)
         plain = build_plain_text(digest_data, edition)
@@ -2065,13 +2074,20 @@ def _mark_notion_articles_used_mail(digest_data: dict) -> None:
     if not notion_token or not notion_db_id:
         return
 
-    # Collect all article URLs from the digest
+    # Collect all article URLs from the digest.
+    # NOTE: sources live at the SECTION level (section["sources"]), not nested
+    # inside each theme — themes only have title/body/implication. This used to
+    # look for theme["articles"], which never existed in the generated JSON, so
+    # `urls` was always empty and this function was a silent no-op: no article
+    # was EVER marked Used+Mail in Notion, so get_notion_used_mail_urls() always
+    # had nothing to exclude and the same articles could be re-cited week after
+    # week. Found 2026-09-21 after a subscriber flagged 11 identical citations
+    # (including HIMALAYA and the p-tau217 series) across two consecutive issues.
     urls = set()
     for section in digest_data.get("sections", []):
-        for theme in section.get("themes", []):
-            for article in theme.get("articles", []):
-                if article.get("url"):
-                    urls.add(article["url"])
+        for source in section.get("sources", []):
+            if source.get("url"):
+                urls.add(source["url"])
 
     if not urls:
         return
@@ -2111,6 +2127,48 @@ def _mark_notion_articles_used_mail(digest_data: dict) -> None:
             print(f"  Notion mark-used warning ({url[:50]}): {e}")
 
     print(f"  Notion: {len(urls)} newsletter articles marked Used (Mail)")
+
+
+def check_recent_article_overlap(digest_data: dict, sb, lookback: int = 3) -> list[str]:
+    """
+    Standing check (user rule, 2026-09-21): before a preview goes out, verify this
+    digest doesn't recycle articles/content from recent past issues. Compares this
+    digest's cited source URLs against the last `lookback` SENT editions in Supabase.
+    Returns human-readable warnings — printed loudly so they can't be missed, even
+    though the root-cause fix (the Notion mark-used bug above) should now prevent
+    this at the source by correctly excluding already-covered articles up front.
+    """
+    cited = {}
+    for sec in digest_data.get("sections", []):
+        for src in sec.get("sources", []):
+            if src.get("url"):
+                cited[src["url"]] = src.get("title", "")
+
+    warnings: list[str] = []
+    try:
+        rows = (
+            sb.table("digests")
+              .select("id,subject,digest_json")
+              .order("sent_at", desc=True)
+              .limit(lookback)
+              .execute()
+        )
+        for row in rows.data or []:
+            try:
+                past = json.loads(row.get("digest_json") or "{}")
+            except Exception:
+                continue
+            for sec in past.get("sections", []):
+                for src in sec.get("sources", []):
+                    url = src.get("url")
+                    if url and url in cited:
+                        warnings.append(
+                            f"'{cited[url][:70]}' also cited in digest #{row['id']} "
+                            f"({row.get('subject','')})"
+                        )
+    except Exception as e:
+        warnings.append(f"Could not check recent overlap: {e}")
+    return warnings
 
 
 if __name__ == "__main__":
