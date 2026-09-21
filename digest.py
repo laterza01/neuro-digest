@@ -95,6 +95,21 @@ def get_edition(sb) -> int:
 
 
 # ── RSS fetching ──────────────────────────────────────────────────────────────
+def normalize_url(url: str) -> str:
+    """
+    Strip query string and fragment so the same article always compares equal
+    regardless of tracking params. Found 2026-09-21: RSS feeds return links like
+    ".../fulltext?rss=yes", but the URL Claude cites (and what gets saved to
+    Notion) is the bare article URL without that suffix. Because the exclusion
+    filter (get_notion_used_mail_urls) did an exact string comparison against
+    the raw RSS link, it NEVER matched — so already-covered articles were never
+    actually excluded, no matter how correctly they were marked Used in Notion.
+    This is why the same articles (HIMALAYA, the p-tau217 series, etc.) kept
+    reappearing week after week even after the Notion-marking bug was fixed.
+    """
+    return url.split("?", 1)[0].split("#", 1)[0].rstrip("/") if url else url
+
+
 def fetch_feed(journal: str, url: str) -> list[dict]:
     try:
         feed = feedparser.parse(url)
@@ -116,7 +131,7 @@ def fetch_feed(journal: str, url: str) -> list[dict]:
                     "summary":  summary[:1200],
                     "journal":  journal,
                     "pub_date": pub.strftime("%Y-%m-%d") if pub else "unknown",
-                    "link":     entry.get("link", ""),
+                    "link":     normalize_url(entry.get("link", "")),
                 })
         return articles
     except Exception as e:
@@ -875,7 +890,7 @@ def _notion_query_urls(extra_filter: dict | None = None) -> set[str]:
         for p in resp.get("results", []):
             url = p["properties"].get("URL", {}).get("url", "") or ""
             if url:
-                urls.add(url)
+                urls.add(normalize_url(url))
         has_more = resp.get("has_more", False)
         start_cursor = resp.get("next_cursor")
     return urls
@@ -1974,7 +1989,7 @@ def run(generate_only: bool = False):
         print("Excluding articles already covered in a previous newsletter...")
         used_urls    = get_notion_used_mail_urls()
         before_count = len(articles)
-        articles     = [a for a in articles if a["link"] not in used_urls]
+        articles     = [a for a in articles if normalize_url(a["link"]) not in used_urls]
         print(f"  {before_count - len(articles)} already-covered article(s) excluded "
               f"({len(used_urls)} previously used) — {len(articles)} remain")
 
@@ -2092,7 +2107,15 @@ def _mark_notion_articles_used_mail(digest_data: dict) -> None:
     if not urls:
         return
 
-    # Query Notion for matching articles
+    # Query Notion for matching articles. NOTE: this previously logged
+    # len(urls) — the number of URLs attempted — as if it were the number
+    # actually updated. If Notion's URL query returned zero results for a
+    # given URL (no matching page, or a formatting mismatch), that URL was
+    # silently skipped but still counted as "marked" in the log, masking the
+    # exact kind of mismatch normalize_url() now exists to prevent. Now
+    # tracks and reports real matches/updates vs. not-found separately.
+    matched = 0
+    not_found: list[str] = []
     for url in urls:
         try:
             query = {"filter": {"property": "URL", "url": {"equals": url}}}
@@ -2105,6 +2128,10 @@ def _mark_notion_articles_used_mail(digest_data: dict) -> None:
             )
             with urllib.request.urlopen(req) as r:
                 results = _json.loads(r.read()).get("results", [])
+
+            if not results:
+                not_found.append(url)
+                continue
 
             for page in results:
                 current_use = [o["name"] for o in page["properties"].get("Use for", {}).get("multi_select", [])]
@@ -2123,10 +2150,12 @@ def _mark_notion_articles_used_mail(digest_data: dict) -> None:
                 )
                 with urllib.request.urlopen(patch) as r:
                     r.read()
+                matched += 1
         except Exception as e:
             print(f"  Notion mark-used warning ({url[:50]}): {e}")
 
-    print(f"  Notion: {len(urls)} newsletter articles marked Used (Mail)")
+    print(f"  Notion: {matched}/{len(urls)} newsletter articles marked Used (Mail)"
+          + (f" — {len(not_found)} URL(s) had no matching Notion page" if not_found else ""))
 
 
 def check_recent_article_overlap(digest_data: dict, sb, lookback: int = 3) -> list[str]:
@@ -2142,7 +2171,7 @@ def check_recent_article_overlap(digest_data: dict, sb, lookback: int = 3) -> li
     for sec in digest_data.get("sections", []):
         for src in sec.get("sources", []):
             if src.get("url"):
-                cited[src["url"]] = src.get("title", "")
+                cited[normalize_url(src["url"])] = src.get("title", "")
 
     warnings: list[str] = []
     try:
@@ -2160,7 +2189,7 @@ def check_recent_article_overlap(digest_data: dict, sb, lookback: int = 3) -> li
                 continue
             for sec in past.get("sections", []):
                 for src in sec.get("sources", []):
-                    url = src.get("url")
+                    url = normalize_url(src.get("url", ""))
                     if url and url in cited:
                         warnings.append(
                             f"'{cited[url][:70]}' also cited in digest #{row['id']} "
