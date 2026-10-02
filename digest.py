@@ -1655,14 +1655,80 @@ def build_guidelines_html_email(
 </html>"""
 
 
-def send_guidelines_edition(
-    subscribers: list[dict],
-    client: anthropic.Anthropic,
-    sb,
-) -> None:
+def _month_start_iso() -> str:
+    now = datetime.now(timezone.utc)
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
+def generate_guidelines_preview(sb, client: anthropic.Anthropic) -> int | None:
     """
-    Send the Monthly Guidelines Edition — same topic to all subscribers.
-    Topic is determined by the current month (fixed rotation).
+    Synthesize this month's Guidelines Edition and save it with approved=False.
+    NEVER sends to subscribers — the preview email to the owner is sent separately
+    (preview_send.py) and the real send only happens after the APPROVE click.
+    If a guidelines digest already exists this month it is reused, not regenerated.
+    """
+    try:
+        existing = (
+            sb.table("digests")
+              .select("id")
+              .gte("sent_at", _month_start_iso())
+              .like("subject", "NeuroDigest Guidelines%")
+              .order("sent_at", desc=True)
+              .limit(1)
+              .execute()
+        )
+        if existing.data:
+            print(f"  Guidelines digest already generated this month "
+                  f"(id={existing.data[0]['id']}) — reusing, not regenerating.")
+            return existing.data[0]["id"]
+    except Exception as e:
+        print(f"  Could not check for an existing guidelines digest: {e}")
+        return None
+
+    macro = guidelines_topic_this_month()
+    print(f"  Guidelines macro topic this month: {macro}")
+
+    already_sent_topics: list[str] = []
+    try:
+        log = sb.table("guidelines_log").select("specific_topic").eq("macro_topic", macro).execute()
+        already_sent_topics = [r["specific_topic"] for r in (log.data or [])]
+        if already_sent_topics:
+            print(f"  Already sent for {macro}: {', '.join(already_sent_topics)}")
+    except Exception as e:
+        print(f"  Could not fetch guidelines log: {e}")
+
+    print("  Synthesizing guidelines with Claude...")
+    data = synthesize_guideline(macro, client, already_sent=already_sent_topics)
+    if not data:
+        print("  Synthesis failed — no guidelines preview generated")
+        return None
+
+    specific = data.get("specific_topic", macro)
+    subject  = f"NeuroDigest Guidelines — {specific}"
+    site_url = os.getenv("SITE_URL", "https://neuro-digest-phi.vercel.app")
+    html_gl  = build_guidelines_html_email(data, site_url=site_url)
+    try:
+        res = sb.table("digests").insert({
+            "subject":     subject,
+            "html":        html_gl,
+            "plain":       f"NeuroDigest Guidelines — {specific}\n\n{data.get('bottom_line', '')}",
+            "digest_json": json.dumps(data),
+            "approved":    False,
+        }).execute()
+        digest_id = res.data[0]["id"] if res.data else None
+        print(f"  Guidelines preview saved (id={digest_id}, approved=False): {specific}")
+        return digest_id
+    except Exception as e:
+        print(f"  Could not save guidelines digest to Supabase: {e}")
+        return None
+
+
+def send_guidelines_edition(subscribers: list[dict], sb) -> None:
+    """
+    Send the Monthly Guidelines Edition — ONLY the digest the owner has approved.
+    Never synthesizes here: the content sent is exactly the one previewed.
+    Without an approved guidelines digest from this month, nothing is sent and
+    the owner gets a reminder email.
     """
     api_key   = os.getenv("RESEND_API_KEY")
     site_url  = os.getenv("SITE_URL", "https://neuro-digest-phi.vercel.app")
@@ -1674,115 +1740,46 @@ def send_guidelines_edition(
     import resend
     resend.api_key = api_key
 
-    macro = guidelines_topic_this_month()
-    print(f"  Guidelines macro topic this month: {macro}")
-
-    # If this month's guidelines were already synthesized (e.g. the :00 cron
-    # run already sent to European subscribers and now the :30 run is catching
-    # UTC−1 / UTC−2 subscribers), reuse the existing digest instead of calling
-    # Claude again.  sends_log dedup ensures no subscriber gets it twice.
     if guideline_sent_this_month(sb):
-        print(f"  Guidelines already synthesized this month — "
-              "resending to any unsent eligible subscribers.")
-        try:
-            now   = datetime.now(timezone.utc)
-            start = now.replace(day=1, hour=0, minute=0,
-                                second=0, microsecond=0).isoformat()
-            rows  = (
-                sb.table("digests")
-                  .select("id,digest_json,subject")
-                  .gte("sent_at", start)
-                  .like("subject", "NeuroDigest Guidelines%")
-                  .order("sent_at", desc=True)
-                  .limit(1)
-                  .execute()
-            )
-            if not rows.data:
-                print("  No existing guidelines digest found — skipping.")
-                return
-            existing_gl   = rows.data[0]
-            gl_digest_id  = existing_gl["id"]
-            data          = json.loads(existing_gl.get("digest_json") or "{}")
-            already_gl    = get_already_sent(sb, gl_digest_id)
-            sent, addrs   = 0, []
-            for sub in subscribers:
-                if sub["email"] in already_gl:
-                    continue
-                token = generate_preferences_token(sub["email"])
-                h     = build_guidelines_html_email(data, token=token,
-                                                    site_url=site_url)
-                h     = ensure_unsubscribe(h, token, site_url)
-                try:
-                    resend.Emails.send({
-                        "from":    from_addr,
-                        "to":      sub["email"],
-                        "subject": existing_gl["subject"],
-                        "html":    h,
-                    })
-                    sent += 1
-                    addrs.append(sub["email"])
-                    time.sleep(0.25)
-                except Exception as e:
-                    print(f"  Resend error ({sub['email']}): {e}")
-            if addrs:
-                log_sends(sb, addrs, gl_digest_id)
-            print(f"  Guidelines resent: {sent} new subscriber(s)")
-        except Exception as e:
-            print(f"  Could not resend existing guidelines: {e}")
+        print("  Guidelines Edition already sent this month — nothing to do.")
         return
 
-    # Fresh synthesis for this month
-    # Fetch sub-topics already sent under this macro area to avoid repeats
-    already_sent_topics: list[str] = []
     try:
-        log = sb.table("guidelines_log") \
-                .select("specific_topic") \
-                .eq("macro_topic", macro) \
-                .execute()
-        already_sent_topics = [r["specific_topic"] for r in (log.data or [])]
-        if already_sent_topics:
-            print(f"  Already sent for {macro}: {', '.join(already_sent_topics)}")
+        rows = (
+            sb.table("digests")
+              .select("id,subject,approved,digest_json,sent_at")
+              .order("sent_at", desc=True)
+              .limit(1)
+              .execute()
+        )
     except Exception as e:
-        print(f"  Could not fetch guidelines log: {e}")
-
-    print(f"  Synthesizing guidelines with Claude...")
-    data = synthesize_guideline(macro, client, already_sent=already_sent_topics)
-    if not data:
-        print("  Synthesis failed — skipping Guidelines Edition")
+        print(f"  ❌ Could not check guidelines approval: {e} — NOT sending.")
         return
 
-    specific = data.get("specific_topic", macro)
-    print(f"  Specific topic chosen: {specific}")
+    row = rows.data[0] if rows.data else None
+    is_this_months_guideline = bool(
+        row
+        and (row.get("subject") or "").startswith("NeuroDigest Guidelines")
+        and (row.get("sent_at") or "") >= _month_start_iso()[:19]
+    )
+    if not is_this_months_guideline:
+        print("  ❌ No guidelines preview generated this month — NOT sending.")
+        send_approval_reminder(None, label="Guidelines Edition")
+        return
+    if not row.get("approved"):
+        print("  Guidelines Edition not approved yet — waiting for APPROVE click.")
+        print("  Nothing sent.")
+        send_approval_reminder(row["id"], label="Guidelines Edition")
+        return
 
-    date_str = datetime.now().strftime("%B %d, %Y")
-    subject  = f"NeuroDigest Guidelines — {specific}"
-    html_gl  = build_guidelines_html_email(data, site_url=site_url)
+    print("  ✅ Guidelines Edition approved — sending the approved digest.")
+    gl_digest_id = row["id"]
+    subject      = row["subject"]
+    data         = json.loads(row.get("digest_json") or "{}")
+    macro        = data.get("macro_topic") or guidelines_topic_this_month()
+    specific     = data.get("specific_topic") or subject
 
-    # Save to Supabase so new subscribers joining this month can also receive it.
-    # digest_json is stored so future resend scripts can rebuild per-subscriber HTML
-    # (with personalised tokens) without re-calling Claude.
-    try:
-        sb.table("digests").insert({
-            "subject":     subject,
-            "html":        html_gl,
-            "plain":       f"NeuroDigest Guidelines — {specific}\n\n{data.get('bottom_line', '')}",
-            "digest_json": json.dumps(data),
-        }).execute()
-    except Exception as e:
-        print(f"  Could not save guidelines digest to Supabase: {e}")
-
-    # Fetch which subscribers already received this guidelines edition
-    # (use digest_id from the saved row so sends_log works consistently)
-    gl_digest_id: int | None = None
-    try:
-        saved = sb.table("digests").select("id").eq("subject", subject) \
-                  .order("sent_at", desc=True).limit(1).execute()
-        if saved.data:
-            gl_digest_id = saved.data[0]["id"]
-    except Exception:
-        pass
-    already_sent_gl = get_already_sent(sb, gl_digest_id) if gl_digest_id else set()
-
+    already_sent_gl = get_already_sent(sb, gl_digest_id)
     sent       = 0
     sent_addrs: list[str] = []
     for sub in subscribers:
@@ -1805,12 +1802,11 @@ def send_guidelines_edition(
         except Exception as e:
             print(f"  Resend error ({email}): {e}")
 
-    if gl_digest_id and sent_addrs:
+    if sent_addrs:
         log_sends(sb, sent_addrs, gl_digest_id)
 
     print(f"  Guidelines Edition sent: {sent}/{len(subscribers)}")
 
-    # Log the specific sub-topic so it is never repeated
     if sent > 0:
         try:
             sb.table("guidelines_log").insert({
@@ -1820,9 +1816,13 @@ def send_guidelines_edition(
             print(f"  Logged: {macro} → {specific}")
         except Exception as e:
             print(f"  Could not log guidelines entry: {e}")
+        try:
+            sb.table("digests").update({"approved": False}).eq("id", gl_digest_id).execute()
+        except Exception:
+            pass
 
 
-def send_approval_reminder(digest_id: int) -> None:
+def send_approval_reminder(digest_id: int | None, label: str = "Newsletter") -> None:
     """Alert the user by email when the Monday send is skipped because nobody approved the preview."""
     api_key = os.getenv("RESEND_API_KEY")
     if not api_key:
@@ -1831,25 +1831,29 @@ def send_approval_reminder(digest_id: int) -> None:
     site_url       = os.getenv("SITE_URL", "https://www.neuro-digest.com").rstrip("/")
     approve_url    = f"{site_url}/api/approve?token={approve_secret}"
     from_addr      = os.getenv("RESEND_FROM", "NeuroDigest <digest@neuro-digest.com>")
+    if digest_id is not None:
+        detail = f"Era l'ora dell'invio ma il digest #{digest_id} non risulta approvato."
+        button = (f'<a href="{approve_url}" style="display:inline-block;background:#0e7c5a;color:#fff;'
+                  'font-size:14px;font-weight:700;text-decoration:none;padding:14px 32px;'
+                  'border-radius:2px;margin-top:12px">✅ Approva e invia ora</a>')
+    else:
+        detail = "Non risulta nessuna preview generata per questo mese, quindi non c'è nulla da approvare."
+        button = ""
     try:
         import resend
         resend.api_key = api_key
         resend.Emails.send({
             "from":    from_addr,
             "to":      "vincenzolate95l@gmail.com",
-            "subject": "⚠️ Newsletter NON approvata — invio di oggi saltato",
+            "subject": f"⚠️ {label} NON approvata — invio di oggi saltato",
             "html": f"""
             <div style="font-family:Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
-              <h2 style="color:#c0392b">La newsletter di oggi non è stata inviata</h2>
+              <h2 style="color:#c0392b">{label}: invio di oggi non effettuato</h2>
               <p style="color:#333;font-size:14px;line-height:1.6">
-                Era l'ora dell'invio settimanale ma il digest #{digest_id} non risulta approvato.
+                {detail}
                 Nessuna email è stata mandata ai subscriber.
               </p>
-              <a href="{approve_url}"
-                 style="display:inline-block;background:#0e7c5a;color:#fff;font-size:14px;
-                        font-weight:700;text-decoration:none;padding:14px 32px;border-radius:2px;margin-top:12px">
-                ✅ Approva e invia ora
-              </a>
+              {button}
             </div>""",
         })
         print(f"  ⚠️  Reminder email sent (digest #{digest_id} not approved)")
@@ -1929,11 +1933,18 @@ def run(generate_only: bool = False):
             return
 
     # ── LAST MONDAY → Guidelines Edition only, no weekly digest ──────────────
+    # Same preview/approve flow as the weekly digest: generate-only (06:00 UTC)
+    # saves an unapproved digest and NEVER sends; send mode (12:00 UTC) sends
+    # only the digest the owner approved and never synthesizes new content.
     if is_last_monday_of_month():
         print("\nLast Monday of month — Guidelines Edition only (no weekly digest).")
         try:
-            client = anthropic.Anthropic(api_key=api_key)
-            send_guidelines_edition(eligible, client, sb)
+            if generate_only:
+                client = anthropic.Anthropic(api_key=api_key)
+                generate_guidelines_preview(sb, client)
+                print("\n✓ Generate-only mode — guidelines digest saved. Preview will follow.")
+            else:
+                send_guidelines_edition(eligible, sb)
         except Exception as e:
             print(f"  Guidelines Edition error: {e}")
         return

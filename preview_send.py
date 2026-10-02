@@ -13,7 +13,7 @@ import resend as resend_lib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from digest import (
-    build_html_email, build_plain_text,
+    build_html_email, build_guidelines_html_email, build_plain_text,
     generate_preferences_token, ensure_unsubscribe,
     save_articles_to_notion,
 )
@@ -50,6 +50,8 @@ edition     = row.get("edition_num") or 0
 subject     = row.get("subject", f"NeuroDigest #{edition}")
 digest_data = json.loads(row.get("digest_json") or "{}")
 print(f"  Using: {subject}")
+is_guidelines = subject.startswith("NeuroDigest Guidelines")
+edition_label = "Guidelines Edition" if is_guidelines else f"Edition #{edition}"
 # Articles already saved to Notion by digest.py --generate-only step
 
 # ── Approve button HTML ───────────────────────────────────────────────────────
@@ -61,7 +63,7 @@ approve_html = f"""
   <tr><td style="padding:24px 32px;text-align:center">
     <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:2px;
               text-transform:uppercase;color:#0e7c5a;font-family:Helvetica,Arial,sans-serif">
-      Preview — Edition #{edition}
+      Preview — {edition_label}
     </p>
     <p style="margin:0 0 16px;font-size:13px;color:#555;font-family:Helvetica,Arial,sans-serif">
       Controlla la newsletter qui sotto. Se è tutto ok, clicca il bottone per inviarla a tutti i subscriber.
@@ -82,9 +84,13 @@ approve_html = f"""
 
 # ── Rebuild HTML with current template ───────────────────────────────────────
 token    = generate_preferences_token(PREVIEW_TO)
-html     = build_html_email(digest_data, edition, preferences_token=token, site_url=site_url)
+if is_guidelines:
+    html  = build_guidelines_html_email(digest_data, token=token, site_url=site_url)
+    plain = f"{subject}\n\n{digest_data.get('bottom_line', '')}"
+else:
+    html  = build_html_email(digest_data, edition, preferences_token=token, site_url=site_url)
+    plain = build_plain_text(digest_data, edition)
 html     = ensure_unsubscribe(html, token, site_url)
-plain    = build_plain_text(digest_data, edition)
 
 # Inject approve banner at the very top of the email body
 html = html.replace("<body", f"<body", 1)
@@ -99,8 +105,8 @@ print(f"Sending preview to {PREVIEW_TO}...")
 resend_lib.Emails.send({
     "from":    from_addr,
     "to":      PREVIEW_TO,
-    "subject": f"[PREVIEW #{edition}] {subject} — approva per inviare",
+    "subject": f"[PREVIEW {edition_label}] {subject} — approva per inviare",
     "html":    html,
-    "text":    f"PREVIEW #{edition}\nApprova su: https://github.com/{GH_REPO}/actions/workflows/digest.yml\n\n{plain}",
+    "text":    f"PREVIEW {edition_label}\nApprova su: https://github.com/{GH_REPO}/actions/workflows/digest.yml\n\n{plain}",
 })
 print("✓ Preview sent.")
