@@ -1,44 +1,56 @@
 """
-Webhook endpoint for Vercel Cron (Monday 06:00 UTC).
-Generates newsletter preview and sends to user — NO GitHub Actions dependency.
+Vercel Cron endpoint (Monday 06:00 UTC).
+Dispatches the preview.yml GitHub Actions workflow, which generates the digest
+(weekly or Guidelines Edition) and emails the preview to the owner. Dispatch is
+async, so it never hits the Vercel function timeout.
 """
+import hmac
+import json
 import os
-import sys
+import urllib.request
 from http.server import BaseHTTPRequestHandler
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+WORKFLOW = "preview.yml"
 
-from pathlib import Path
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
-
-import digest
+def is_authorized(auth_header: str) -> bool:
+    # Vercel Cron sends "Authorization: Bearer $CRON_SECRET"; external schedulers
+    # (EasyCron) send WEBHOOK_SECRET. Accept either, and refuse if none is set.
+    for name in ("CRON_SECRET", "WEBHOOK_SECRET"):
+        secret = os.getenv(name, "")
+        if secret and hmac.compare_digest(auth_header, f"Bearer {secret}"):
+            return True
+    return False
 
 
 class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        auth_header = self.headers.get("Authorization", "")
-        webhook_secret = os.getenv("WEBHOOK_SECRET", "")
-
-        if webhook_secret and auth_header != f"Bearer {webhook_secret}":
+    def do_GET(self):
+        if not is_authorized(self.headers.get("Authorization", "")):
             self._respond(401, "Unauthorized")
             return
 
-        print("[webhook_preview] Vercel Cron triggered newsletter preview generation")
+        gh_token = os.getenv("GH_TOKEN", "")
+        if not gh_token:
+            self._respond(500, "GH_TOKEN not configured")
+            return
 
+        url = f"https://api.github.com/repos/laterza01/neuro-digest/actions/workflows/{WORKFLOW}/dispatches"
+        req = urllib.request.Request(url, data=json.dumps({"ref": "main"}).encode())
+        req.add_header("Authorization", f"Bearer {gh_token}")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("Content-Type", "application/json")
         try:
-            digest.run(generate_only=True)
-            self._respond(200, "✅ Newsletter preview generated")
+            with urllib.request.urlopen(req, timeout=15) as r:
+                if r.status == 204:
+                    print(f"[webhook_preview] ✓ {WORKFLOW} dispatched")
+                    self._respond(200, f"✅ {WORKFLOW} dispatched")
+                    return
+                self._respond(500, f"GitHub returned {r.status}")
         except Exception as e:
-            print(f"[webhook_preview] Error: {e}")
-            import traceback
-            traceback.print_exc()
-            self._respond(500, f"Error: {str(e)}")
+            print(f"[webhook_preview] ✗ Error: {e}")
+            self._respond(500, f"Error: {e}")
 
-    def do_GET(self):
-        # Vercel Cron sends GET, not POST — must run the same generation logic.
-        self.do_POST()
+    do_POST = do_GET
 
     def _respond(self, code, body):
         encoded = body.encode("utf-8")

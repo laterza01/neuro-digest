@@ -36,7 +36,7 @@ site_url       = os.getenv("SITE_URL", "https://neuro-digest-phi.vercel.app")
 print("Fetching latest digest from Supabase...")
 rows = (
     sb.table("digests")
-      .select("id,edition_num,subject,digest_json")
+      .select("id,edition_num,subject,digest_json,sent_at")
       .order("sent_at", desc=True)
       .limit(1)
       .execute()
@@ -46,6 +46,18 @@ if not rows.data:
     sys.exit(0)
 
 row         = rows.data[0]
+
+# Never preview a stale digest (generation failed today) or one that already went
+# out (late backup run after the 12:00 send): the APPROVE button acts on the
+# latest digest, so a wrong preview could re-approve old content.
+from datetime import datetime, timezone
+from digest import get_already_sent
+if (row.get("sent_at") or "")[:10] != datetime.now(timezone.utc).strftime("%Y-%m-%d"):
+    print(f"Latest digest ({row.get('subject')}) was not generated today — no fresh digest to preview. Exiting.")
+    sys.exit(1)
+if get_already_sent(sb, row["id"]):
+    print("Latest digest was already sent to subscribers — no preview needed. Exiting.")
+    sys.exit(0)
 edition     = row.get("edition_num") or 0
 subject     = row.get("subject", f"NeuroDigest #{edition}")
 digest_data = json.loads(row.get("digest_json") or "{}")

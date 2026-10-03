@@ -1917,6 +1917,10 @@ def run(generate_only: bool = False):
             if rows.data:
                 approved = rows.data[0].get("approved", False)
                 if not approved:
+                    if get_already_sent(sb, rows.data[0]["id"]):
+                        print("  Latest digest was already sent (approval reset) — "
+                              "nothing to do, no reminder.")
+                        return
                     print("  Newsletter not approved yet — waiting for APPROVE click.")
                     print("  Nothing sent. Will retry next cron run.")
                     send_approval_reminder(rows.data[0]["id"])
