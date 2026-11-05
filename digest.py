@@ -601,6 +601,22 @@ def build_html_email(digest: dict, edition: int,
     preheader_txt = single_action or "Your weekly neurology literature briefing."
     section_list  = digest.get("sections", [])
 
+    # Optional one-off note from the author, stored in digest_json["intro_note"].
+    # First line is the bold lead-in, the rest the body. Absent in normal issues.
+    intro_html = ""
+    _note = (digest.get("intro_note") or "").strip()
+    if _note:
+        import html as _html
+        _lead, _, _rest = _note.partition("\n")
+        intro_html = (
+            '<tr><td style="padding:22px 48px;background:#faf9f7;border-bottom:1px solid #e8e8e4">'
+            '<p style="margin:0;font-size:15px;line-height:1.65;color:#333;'
+            "font-family:Georgia,'Times New Roman',serif\">"
+            f'<strong>{_html.escape(_lead)}</strong>'
+            + (f'<br>{_html.escape(_rest.strip())}' if _rest.strip() else '')
+            + '</p></td></tr>'
+        )
+
     # ── Build section HTML ────────────────────────────────────────────────────
     sections = ""
     for i, sec in enumerate(section_list):
@@ -740,6 +756,8 @@ def build_html_email(digest: dict, edition: int,
     <!-- Red rule below masthead -->
     <tr><td style="height:3px;background:{ACC};font-size:0;line-height:0">&nbsp;</td></tr>
 
+    {intro_html}
+
     <!-- ── Table of contents ────────────────────────────────────────────── -->
     {toc_html}
 
@@ -787,6 +805,8 @@ def build_html_email(digest: dict, edition: int,
 def build_plain_text(digest: dict, edition: int) -> str:
     date_str = datetime.now().strftime("%B %d, %Y")
     out = f"NEURODIGEST — Edition #{edition} — {date_str}\n{'=' * 54}\n\n"
+    if (digest.get("intro_note") or "").strip():
+        out += digest["intro_note"].strip() + "\n\n" + "-" * 54 + "\n\n"
     for sec in digest.get("sections", []):
         topic = sec["topic"]
         out += f"{topic.upper()}\n{'-' * len(topic)}\n"
